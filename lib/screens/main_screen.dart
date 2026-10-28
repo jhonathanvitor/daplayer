@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/bottom_player_bar.dart';
 import '../widgets/add_to_playlist_dialog.dart';
 import '../widgets/auth_dialog.dart';
+import '../widgets/google_connect_dialog.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -335,16 +336,11 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 if (!user.isYouTubeConnected)
                   InkWell(
-                    onTap: () async {
-                      final success = await auth.linkGoogleAccount();
-                      if (mounted && success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Conta do YouTube vinculada com sucesso!'),
-                            backgroundColor: Color(0xFF7B2CBF),
-                          ),
-                        );
-                      }
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => const GoogleConnectDialog(isDirectLogin: false),
+                      );
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

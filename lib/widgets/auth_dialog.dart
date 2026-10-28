@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import 'google_connect_dialog.dart';
 
 class AuthDialog extends StatefulWidget {
   const AuthDialog({super.key});
@@ -23,6 +24,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
   final _registerConfirmPasswordController = TextEditingController();
 
   bool _obscurePassword = true;
+  bool _connectYouTubeOnRegister = true; // Marcado por padrão para abrir a vinculação!
 
   @override
   void initState() {
@@ -50,8 +52,8 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
       backgroundColor: const Color(0xFF161622),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        width: 440,
-        padding: const EdgeInsets.all(28),
+        width: 450,
+        padding: const EdgeInsets.all(26),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -68,7 +70,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
                       ),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.lock_outline, color: Colors.white, size: 28),
+                    child: const Icon(Icons.lock_outline, color: Colors.white, size: 26),
                   ),
                   const SizedBox(width: 14),
                   const Column(
@@ -94,11 +96,11 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-
-              // Botão Principal: Continuar com o Google (Fluxo B)
-              _buildGoogleButton(auth),
               const SizedBox(height: 18),
+
+              // Botão de Login Direto com Google (Fluxo B)
+              _buildGoogleButton(context),
+              const SizedBox(height: 16),
 
               // Divisor com "OU"
               Row(
@@ -119,7 +121,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
                   const Expanded(child: Divider(color: Colors.white12)),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
               // Seletor de Abas (Entrar / Cadastrar)
               Container(
@@ -171,7 +173,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
 
               // Conteúdo das Abas
               SizedBox(
-                height: 280,
+                height: 310,
                 child: TabBarView(
                   controller: _tabController,
                   children: [
@@ -187,25 +189,16 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildGoogleButton(AuthProvider auth) {
+  Widget _buildGoogleButton(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: auth.isLoading
-          ? null
-          : () async {
-              final success = await auth.signInWithGoogle();
-              if (success && mounted) {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Conectado com o Google! YouTube ativado para ${auth.currentUser?.name}!',
-                    ),
-                    backgroundColor: const Color(0xFF7B2CBF),
-                  ),
-                );
-              }
-            },
+      onTap: () async {
+        Navigator.of(context).pop();
+        await showDialog(
+          context: context,
+          builder: (ctx) => const GoogleConnectDialog(isDirectLogin: true),
+        );
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
@@ -222,7 +215,6 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Ícone estilizado do Google
             Container(
               padding: const EdgeInsets.all(4),
               decoration: const BoxDecoration(
@@ -311,28 +303,42 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
             label: 'Seu Nome Completo',
             icon: Icons.person_outline,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _buildTextField(
             controller: _registerEmailController,
             label: 'E-mail',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _buildTextField(
             controller: _registerPasswordController,
             label: 'Senha (mínimo 6 dígitos)',
             icon: Icons.lock_outline,
             obscureText: _obscurePassword,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _buildTextField(
             controller: _registerConfirmPasswordController,
             label: 'Confirmar Senha',
             icon: Icons.lock_clock_outlined,
             obscureText: _obscurePassword,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
+
+          // Checkbox para vincular conta do YouTube logo após criar a conta
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            activeColor: const Color(0xFF7B2CBF),
+            title: const Text(
+              'Abrir para vincular conta do YouTube logo após cadastrar',
+              style: TextStyle(color: Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+            value: _connectYouTubeOnRegister,
+            onChanged: (val) => setState(() => _connectYouTubeOnRegister = val ?? true),
+          ),
+          const SizedBox(height: 8),
 
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -348,7 +354,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
                 : const Text(
-                    'Cadastrar e Salvar Criptografado',
+                    'Cadastrar e Prosseguir',
                     style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
           ),
@@ -377,7 +383,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: const Color(0xFF222232),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -438,13 +444,22 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
 
     final success = await auth.register(name, email, password);
     if (success && mounted) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Conta criada com sucesso e salva criptografada! Olá, $name!'),
-          backgroundColor: const Color(0xFF7B2CBF),
-        ),
-      );
+      Navigator.of(context).pop(); // Fecha o modal de cadastro
+
+      if (_connectYouTubeOnRegister) {
+        // Abre imediatamente o modal para vincular a conta do Google/YouTube!
+        await showDialog(
+          context: context,
+          builder: (ctx) => const GoogleConnectDialog(isDirectLogin: false),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Conta criada com sucesso e salva criptografada! Olá, $name!'),
+            backgroundColor: const Color(0xFF7B2CBF),
+          ),
+        );
+      }
     }
   }
 }
