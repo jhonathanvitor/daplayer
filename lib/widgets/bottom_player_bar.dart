@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/audio_player_service.dart';
+import '../services/window_mode_service.dart';
 
 class BottomPlayerBar extends StatelessWidget {
   const BottomPlayerBar({super.key});
@@ -17,7 +18,7 @@ class BottomPlayerBar extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF161622),
         boxShadow: [
@@ -36,20 +37,21 @@ class BottomPlayerBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Barra de Progresso da Música
+            // Barra de Progresso Fina Branca (estilo modelo.webp)
             ProgressBar(
               progress: playerService.position,
               total: playerService.duration,
               buffered: playerService.position,
-              progressBarColor: const Color(0xFF9D4EDD),
-              baseBarColor: Colors.white12,
-              bufferedBarColor: Colors.white24,
-              thumbColor: const Color(0xFFC77DFF),
-              barHeight: 3.5,
-              thumbRadius: 6.0,
+              progressBarColor: Colors.white,
+              baseBarColor: Colors.white.withValues(alpha: 0.2),
+              bufferedBarColor: Colors.white.withValues(alpha: 0.3),
+              thumbColor: Colors.white,
+              barHeight: 3.0,
+              thumbRadius: 5.5,
               timeLabelTextStyle: const TextStyle(
-                color: Colors.white54,
+                color: Colors.white70,
                 fontSize: 11,
+                fontWeight: FontWeight.bold,
               ),
               onSeek: (duration) {
                 playerService.seek(duration);
@@ -63,18 +65,18 @@ class BottomPlayerBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(
                     imageUrl: track.thumbnailUrl,
-                    width: 52,
-                    height: 52,
+                    width: 48,
+                    height: 48,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
-                      width: 52,
-                      height: 52,
+                      width: 48,
+                      height: 48,
                       color: Colors.white10,
                       child: const Icon(Icons.music_note, color: Colors.white30),
                     ),
                     errorWidget: (context, url, error) => Container(
-                      width: 52,
-                      height: 52,
+                      width: 48,
+                      height: 48,
                       color: Colors.white10,
                       child: const Icon(Icons.music_note, color: Colors.white30),
                     ),
@@ -112,49 +114,66 @@ class BottomPlayerBar extends StatelessWidget {
                   ),
                 ),
 
-                // Controles de Reprodução (Voltar, Play/Pause, Próxima)
+                // Controles de Reprodução (Voltar, Play/Pause Central Branco, Próxima)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       icon: const Icon(Icons.skip_previous, color: Colors.white),
                       iconSize: 28,
+                      tooltip: 'Música Anterior',
                       onPressed: () => playerService.previous(),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     if (playerService.isLoading)
                       const SizedBox(
-                        width: 42,
-                        height: 42,
+                        width: 44,
+                        height: 44,
                         child: Padding(
                           padding: EdgeInsets.all(8.0),
                           child: CircularProgressIndicator(
                             strokeWidth: 2.5,
-                            color: Color(0xFFC77DFF),
+                            color: Colors.white,
                           ),
                         ),
                       )
                     else
-                      IconButton(
-                        icon: Icon(
-                          playerService.isPlaying
-                              ? Icons.pause_circle_filled
-                              : Icons.play_circle_filled,
-                          color: const Color(0xFF9D4EDD),
+                      GestureDetector(
+                        onTap: () => playerService.togglePlayPause(),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 6,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Icon(
+                              playerService.isPlaying ? Icons.pause : Icons.play_arrow,
+                              color: Colors.black,
+                              size: 26,
+                            ),
+                          ),
                         ),
-                        iconSize: 42,
-                        onPressed: () => playerService.togglePlayPause(),
                       ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     IconButton(
                       icon: const Icon(Icons.skip_next, color: Colors.white),
                       iconSize: 28,
+                      tooltip: 'Próxima Música',
                       onPressed: () => playerService.next(),
                     ),
                   ],
                 ),
 
-                const SizedBox(width: 20),
+                const SizedBox(width: 24),
 
                 // Controle de Volume
                 Row(
@@ -170,13 +189,12 @@ class BottomPlayerBar extends StatelessWidget {
                       size: 20,
                     ),
                     SizedBox(
-                      width: 100,
+                      width: 90,
                       child: SliderTheme(
                         data: SliderTheme.of(context).copyWith(
-                          thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 5),
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
                           trackHeight: 3,
-                          activeTrackColor: const Color(0xFF9D4EDD),
+                          activeTrackColor: Colors.white,
                           inactiveTrackColor: Colors.white12,
                           thumbColor: Colors.white,
                         ),
@@ -189,6 +207,18 @@ class BottomPlayerBar extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+
+                const SizedBox(width: 14),
+
+                // Botão para Minimizar para o Mini Player Flutuante (estilo modelo.webp)
+                IconButton(
+                  icon: const Icon(Icons.picture_in_picture_alt, color: Colors.white70, size: 22),
+                  tooltip: 'Mini Player Flutuante (estilo modelo.webp)',
+                  onPressed: () {
+                    final windowMode = Provider.of<WindowModeService>(context, listen: false);
+                    windowMode.switchToMiniMode();
+                  },
                 ),
               ],
             ),

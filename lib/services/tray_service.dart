@@ -10,6 +10,9 @@ class TrayService {
   VoidCallback? onPlayPausePressed;
   VoidCallback? onNextPressed;
   VoidCallback? onPreviousPressed;
+  VoidCallback? onTrayClick;
+  VoidCallback? onOpenMiniPlayer;
+  VoidCallback? onOpenFullPlayer;
 
   bool _initialized = false;
   String _currentTitle = 'Nenhuma música tocando';
@@ -20,6 +23,9 @@ class TrayService {
     VoidCallback? onPlayPause,
     VoidCallback? onNext,
     VoidCallback? onPrevious,
+    VoidCallback? onTrayClick,
+    VoidCallback? onOpenMiniPlayer,
+    VoidCallback? onOpenFullPlayer,
   }) async {
     if (!Platform.isLinux && !Platform.isWindows && !Platform.isMacOS) {
       return;
@@ -28,6 +34,9 @@ class TrayService {
     onPlayPausePressed = onPlayPause;
     onNextPressed = onNext;
     onPreviousPressed = onPrevious;
+    this.onTrayClick = onTrayClick;
+    this.onOpenMiniPlayer = onOpenMiniPlayer;
+    this.onOpenFullPlayer = onOpenFullPlayer;
 
     try {
       final iconPath = Platform.isWindows ? 'assets/icon.ico' : 'assets/tray_icon.png';
@@ -35,14 +44,13 @@ class TrayService {
       await _systemTray.initSystemTray(
         title: "DaPlayer",
         iconPath: iconPath,
-        toolTip: "DaPlayer - Tocando música em segundo plano",
+        toolTip: "DaPlayer - Player de Coletâneas",
       );
 
-      // Evento de clique no ícone da barra de sistema (abre/restaura o app)
+      // Evento de clique no ícone da barra de sistema (abre o mini player flutuante)
       _systemTray.registerSystemTrayEventHandler((eventName) {
         if (eventName == kSystemTrayEventClick) {
-          windowManager.show();
-          windowManager.focus();
+          this.onTrayClick?.call();
         } else if (eventName == kSystemTrayEventRightClick) {
           _systemTray.popUpContextMenu();
         }
@@ -99,14 +107,16 @@ class TrayService {
       ),
       MenuSeparator(),
       MenuItemLabel(
-        label: '🪟  Abrir DaPlayer',
-        onClicked: (menuItem) {
-          windowManager.show();
-          windowManager.focus();
-        },
+        label: '📱  Mini Player Flutuante',
+        onClicked: (menuItem) => onOpenMiniPlayer?.call(),
       ),
       MenuItemLabel(
-        label: '❌  Sair',
+        label: '🪟  Abrir DaPlayer Completo',
+        onClicked: (menuItem) => onOpenFullPlayer?.call(),
+      ),
+      MenuSeparator(),
+      MenuItemLabel(
+        label: '❌  Encerrar DaPlayer',
         onClicked: (menuItem) {
           windowManager.destroy();
         },
