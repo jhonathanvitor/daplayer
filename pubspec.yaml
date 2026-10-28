@@ -38,6 +38,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   url_launcher: ^6.3.2
   screen_retriever: ^0.2.2
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
