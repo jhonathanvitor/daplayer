@@ -24,6 +24,29 @@ if ! command -v flutter &> /dev/null; then
     fi
 fi
 
+# Verifica ferramentas de compilação C++/GTK e bibliotecas do Linux
+MISSING_PKGS=""
+for tool in cmake clang ninja pkg-config; do
+    if ! command -v "$tool" &> /dev/null; then
+        MISSING_PKGS="$MISSING_PKGS $tool"
+    fi
+done
+
+if ! pkg-config --exists ayatana-appindicator3-0.1 2>/dev/null && ! pkg-config --exists appindicator3-0.1 2>/dev/null; then
+    MISSING_PKGS="$MISSING_PKGS libayatana-appindicator3-dev"
+fi
+
+if [ -n "$MISSING_PKGS" ]; then
+    echo "=========================================================="
+    echo " Faltando dependências para a Bandeja do Sistema (Tray):"
+    echo " $MISSING_PKGS"
+    echo ""
+    echo " Execute este comando no terminal para instalar:"
+    echo " sudo apt install -y libayatana-appindicator3-dev"
+    echo "=========================================================="
+    exit 1
+fi
+
 echo ">> Flutter detectado: $(flutter --version | head -n 1)"
 
 # 2. Obter dependências do Flutter
