@@ -54,9 +54,11 @@ echo ">> Baixando dependências pubspec.yaml..."
 cd "$PROJECT_DIR"
 flutter pub get
 
-# 3. Compilar versão release para Linux
-echo ">> Compilando DaPlayer para Linux (Release)..."
-flutter build linux --release
+# 3. Compilar versão release para Linux (se não tiver flag --no-build)
+if [ "$1" != "--no-build" ]; then
+    echo ">> Compilando DaPlayer para Linux (Release)..."
+    flutter build linux --release
+fi
 
 if [ ! -d "$BUILD_DIR" ]; then
     echo "Erro: Falha na compilação do bundle Linux em $BUILD_DIR"
@@ -121,6 +123,7 @@ fi
 # 6. Empacotar o AppImage
 echo ">> Gerando DaPlayer-x86_64.AppImage..."
 export ARCH=x86_64
+rm -f "$OUTPUT_DIR/DaPlayer-x86_64.AppImage"
 "$APPIMAGETOOL" --appimage-extract-and-run "$APPDIR" "$OUTPUT_DIR/DaPlayer-x86_64.AppImage"
 
 echo "=========================================="
