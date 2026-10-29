@@ -42,9 +42,8 @@ class TrayService {
       final iconPath = Platform.isWindows ? 'assets/icon.ico' : 'assets/tray_icon.png';
 
       await _systemTray.initSystemTray(
-        title: "DaPlayer",
         iconPath: iconPath,
-        toolTip: "DaPlayer - Player de Coletâneas",
+        toolTip: "DaPlayer",
       );
 
       // Evento de clique no ícone da barra de sistema (abre o mini player flutuante)
