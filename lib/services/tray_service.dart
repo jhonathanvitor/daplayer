@@ -107,11 +107,7 @@ class TrayService {
       ),
       MenuSeparator(),
       MenuItemLabel(
-        label: '📱  Mini Player Flutuante',
-        onClicked: (menuItem) => onOpenMiniPlayer?.call(),
-      ),
-      MenuItemLabel(
-        label: '🪟  Abrir DaPlayer Completo',
+        label: '🪟  Abrir DaPlayer',
         onClicked: (menuItem) => onOpenFullPlayer?.call(),
       ),
       MenuSeparator(),

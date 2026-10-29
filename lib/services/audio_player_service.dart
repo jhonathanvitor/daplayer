@@ -1,12 +1,15 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import '../models/track.dart';
 import '../models/playlist.dart';
 import 'youtube_service.dart';
 import 'tray_service.dart';
+import 'linux_gst_player.dart';
 
 class AudioPlayerService extends ChangeNotifier {
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer? _justAudioPlayer = !Platform.isLinux ? AudioPlayer() : null;
+  final LinuxGstPlayer? _gstPlayer = Platform.isLinux ? LinuxGstPlayer() : null;
   final YouTubeService _ytService;
   final TrayService _trayService;
 
@@ -44,33 +47,59 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   void _initListeners() {
-    _player.playerStateStream.listen((state) {
-      final playing = state.playing && state.processingState != ProcessingState.completed;
-      if (_isPlaying != playing) {
-        _isPlaying = playing;
-        _updateTray();
+    if (Platform.isLinux && _gstPlayer != null) {
+      _gstPlayer.isPlayingStream.listen((playing) {
+        if (_isPlaying != playing) {
+          _isPlaying = playing;
+          _updateTray();
+          notifyListeners();
+        }
+      });
+
+      _gstPlayer.positionStream.listen((pos) {
+        _position = pos;
         notifyListeners();
-      }
+      });
 
-      if (state.processingState == ProcessingState.completed) {
+      _gstPlayer.durationStream.listen((dur) {
+        _duration = dur;
+        notifyListeners();
+      });
+
+      _gstPlayer.onCompleted = () {
         next();
-      }
-    });
+      };
+    } else if (_justAudioPlayer != null) {
+      _justAudioPlayer.playerStateStream.listen((state) {
+        final playing = state.playing && state.processingState != ProcessingState.completed;
+        if (_isPlaying != playing) {
+          _isPlaying = playing;
+          _updateTray();
+          notifyListeners();
+        }
 
-    _player.positionStream.listen((pos) {
-      _position = pos;
-      notifyListeners();
-    });
+        if (state.processingState == ProcessingState.completed) {
+          next();
+        }
+      });
 
-    _player.durationStream.listen((dur) {
-      _duration = dur ?? Duration.zero;
-      notifyListeners();
-    });
+      _justAudioPlayer.positionStream.listen((pos) {
+        _position = pos;
+        notifyListeners();
+      });
+
+      _justAudioPlayer.durationStream.listen((dur) {
+        _duration = dur ?? Duration.zero;
+        notifyListeners();
+      });
+    }
   }
 
   Future<void> playTrack(Track track) async {
     _currentTrack = track;
     _isLoading = true;
+    _position = Duration.zero;
+    _duration = track.duration;
     notifyListeners();
 
     _updateTray();
@@ -78,8 +107,15 @@ class AudioPlayerService extends ChangeNotifier {
     try {
       final audioUrl = await _ytService.getAudioOnlyStreamUrl(track.id);
       if (audioUrl != null) {
-        await _player.setUrl(audioUrl);
-        await _player.play();
+        if (Platform.isLinux && _gstPlayer != null) {
+          await _gstPlayer.setUrl(audioUrl);
+          await _gstPlayer.play();
+          _isPlaying = true;
+        } else if (_justAudioPlayer != null) {
+          await _justAudioPlayer.setUrl(audioUrl);
+          await _justAudioPlayer.play();
+          _isPlaying = true;
+        }
       } else {
         debugPrint('Não foi possível obter áudio para ${track.title}');
       }
@@ -88,6 +124,7 @@ class AudioPlayerService extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+      _updateTray();
     }
   }
 
@@ -107,12 +144,31 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> togglePlayPause() async {
-    if (_player.playing) {
-      await _player.pause();
+    if (_isPlaying) {
+      await pause();
     } else {
-      await _player.play();
+      await resume();
     }
-    _isPlaying = _player.playing;
+  }
+
+  Future<void> pause() async {
+    if (Platform.isLinux && _gstPlayer != null) {
+      await _gstPlayer.pause();
+    } else if (_justAudioPlayer != null) {
+      await _justAudioPlayer.pause();
+    }
+    _isPlaying = false;
+    _updateTray();
+    notifyListeners();
+  }
+
+  Future<void> resume() async {
+    if (Platform.isLinux && _gstPlayer != null) {
+      await _gstPlayer.play();
+    } else if (_justAudioPlayer != null) {
+      await _justAudioPlayer.play();
+    }
+    _isPlaying = true;
     _updateTray();
     notifyListeners();
   }
@@ -137,12 +193,22 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> seek(Duration pos) async {
-    await _player.seek(pos);
+    _position = pos;
+    if (Platform.isLinux && _gstPlayer != null) {
+      await _gstPlayer.seek(pos);
+    } else if (_justAudioPlayer != null) {
+      await _justAudioPlayer.seek(pos);
+    }
+    notifyListeners();
   }
 
   Future<void> setVolume(double vol) async {
     _volume = vol.clamp(0.0, 1.0);
-    await _player.setVolume(_volume);
+    if (Platform.isLinux && _gstPlayer != null) {
+      await _gstPlayer.setVolume(_volume);
+    } else if (_justAudioPlayer != null) {
+      await _justAudioPlayer.setVolume(_volume);
+    }
     notifyListeners();
   }
 
@@ -153,18 +219,13 @@ class AudioPlayerService extends ChangeNotifier {
         artist: _currentTrack!.artist,
         isPlaying: _isPlaying,
       );
-    } else {
-      _trayService.updateTrayInfo(
-        title: 'Nenhuma música',
-        artist: '',
-        isPlaying: false,
-      );
     }
   }
 
   @override
   void dispose() {
-    _player.dispose();
+    _gstPlayer?.dispose();
+    _justAudioPlayer?.dispose();
     super.dispose();
   }
 }

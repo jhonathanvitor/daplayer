@@ -114,16 +114,52 @@ class YouTubeService {
     }
   }
 
+  static final _visionClient = YoutubeApiClient({
+    'context': {
+      'client': {
+        'clientName': 'VISIONOS',
+        'clientVersion': '1.02',
+        'deviceMake': 'Apple',
+        'deviceModel': 'RealityDevice17,1',
+        'userAgent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+        'osName': 'visionOS',
+        'osVersion': '26.5.23O471',
+        'hl': 'en',
+        'gl': 'US',
+        'timeZone': 'UTC',
+        'utcOffsetMinutes': 0,
+      }
+    }
+  }, 'https://www.youtube.com/youtubei/v1/player?key=AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc&prettyPrint=false');
+
   /// Obtém a URL direta do stream de áudio apenas (M4A / Opus) com maior bitrate
   Future<String?> getAudioOnlyStreamUrl(String videoId) async {
     try {
+      // 1. Tenta via cliente VISIONOS (sem bloqueio 403 / PoToken)
+      final manifest = await _yt.videos.streamsClient.getManifest(
+        videoId,
+        ytClients: [_visionClient],
+      );
+      final audioList = manifest.audioOnly;
+      if (audioList.isNotEmpty) {
+        return audioList.withHighestBitrate().url.toString();
+      }
+    } catch (e) {
+      debugPrint('Aviso: falha com cliente VISIONOS para $videoId: $e. Tentando padrão...');
+    }
+
+    // 2. Fallback para cliente padrão
+    try {
       final manifest = await _yt.videos.streamsClient.getManifest(videoId);
-      final audioStreamInfo = manifest.audioOnly.withHighestBitrate();
-      return audioStreamInfo.url.toString();
+      final audioList = manifest.audioOnly;
+      if (audioList.isNotEmpty) {
+        return audioList.withHighestBitrate().url.toString();
+      }
     } catch (e) {
       debugPrint('Erro ao extrair áudio de $videoId: $e');
-      return null;
     }
+    return null;
   }
 
   /// Obtém coletâneas populares / sugestões iniciais

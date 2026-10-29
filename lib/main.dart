@@ -7,16 +7,13 @@ import 'services/youtube_service.dart';
 import 'services/tray_service.dart';
 import 'services/audio_player_service.dart';
 import 'services/playlist_service.dart';
-import 'services/window_mode_service.dart';
 import 'repositories/auth_repository.dart';
 import 'providers/auth_provider.dart';
 import 'screens/main_screen.dart';
-import 'widgets/floating_mini_player.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final windowModeService = WindowModeService();
   final ytService = YouTubeService();
   final trayService = TrayService();
   final playerService = AudioPlayerService(
@@ -43,17 +40,27 @@ void main() async {
       await windowManager.focus();
     });
 
-    // Impede o fechamento total imediato para esconder na bandeja ou mini player
+    // Impede o fechamento total imediato para esconder na bandeja
     await windowManager.setPreventClose(true);
 
-    // Conecta a bandeja aos modos de janela
+    // Conecta a bandeja para restaurar ou ocultar a janela
     await trayService.initTray(
       onPlayPause: playerService.togglePlayPause,
       onNext: playerService.next,
       onPrevious: playerService.previous,
-      onTrayClick: windowModeService.toggleMiniOrRestore,
-      onOpenMiniPlayer: windowModeService.switchToMiniMode,
-      onOpenFullPlayer: windowModeService.switchToFullMode,
+      onTrayClick: () async {
+        final isVisible = await windowManager.isVisible();
+        if (isVisible) {
+          await windowManager.hide();
+        } else {
+          await windowManager.show();
+          await windowManager.focus();
+        }
+      },
+      onOpenFullPlayer: () async {
+        await windowManager.show();
+        await windowManager.focus();
+      },
     );
   }
 
@@ -66,7 +73,6 @@ void main() async {
         ChangeNotifierProvider<AudioPlayerService>.value(value: playerService),
         ChangeNotifierProvider<PlaylistService>.value(value: playlistService),
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
-        ChangeNotifierProvider<WindowModeService>.value(value: windowModeService),
       ],
       child: const DaPlayerApp(),
     ),
@@ -97,26 +103,20 @@ class _DaPlayerAppState extends State<DaPlayerApp> with WindowListener {
     super.dispose();
   }
 
-  // Intercepta quando o usuário clica no "X" ou minimiza
+  // Intercepta quando o usuário clica no "X" para minimizar para a bandeja
   @override
   void onWindowClose() async {
-    final windowMode = Provider.of<WindowModeService>(context, listen: false);
-    // Transforma no Mini Player Flutuante do modelo.webp
-    await windowMode.switchToMiniMode();
+    await windowManager.hide();
   }
 
   @override
   Widget build(BuildContext context) {
-    final windowMode = Provider.of<WindowModeService>(context);
-
     return MaterialApp(
       title: 'DaPlayer',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: windowMode.isMiniMode
-            ? Colors.transparent
-            : const Color(0xFF0F0F17),
+        scaffoldBackgroundColor: const Color(0xFF0F0F17),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF9D4EDD),
           secondary: Color(0xFFF72585),
@@ -125,12 +125,7 @@ class _DaPlayerAppState extends State<DaPlayerApp> with WindowListener {
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),
-      home: windowMode.isMiniMode
-          ? FloatingMiniPlayer(
-              onExpandToFull: windowMode.switchToFullMode,
-              onCloseToTray: windowMode.hideToTray,
-            )
-          : const MainScreen(),
+      home: const MainScreen(),
     );
   }
 }

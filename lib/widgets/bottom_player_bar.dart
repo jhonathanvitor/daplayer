@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/audio_player_service.dart';
-import '../services/window_mode_service.dart';
 
 class BottomPlayerBar extends StatelessWidget {
   const BottomPlayerBar({super.key});
@@ -207,18 +206,6 @@ class BottomPlayerBar extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-
-                const SizedBox(width: 14),
-
-                // Botão para Minimizar para o Mini Player Flutuante (estilo modelo.webp)
-                IconButton(
-                  icon: const Icon(Icons.picture_in_picture_alt, color: Colors.white70, size: 22),
-                  tooltip: 'Mini Player Flutuante (estilo modelo.webp)',
-                  onPressed: () {
-                    final windowMode = Provider.of<WindowModeService>(context, listen: false);
-                    windowMode.switchToMiniMode();
-                  },
                 ),
               ],
             ),
