@@ -44,7 +44,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Local secrets and distribution builds
+# Local secrets, database and distribution builds
 oauth_config.json
 *.env
 dist/
+*.db
+*.db-shm
+*.db-wal

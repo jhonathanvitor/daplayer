@@ -257,30 +257,15 @@ class _MainScreenState extends State<MainScreen> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFF7B2CBF).withValues(alpha: 0.3)),
         ),
-        child: Column(
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.lock_outline, color: Color(0xFF00F5D4), size: 16),
-                SizedBox(width: 6),
-                Text(
-                  'Banco SQLite Protegido',
-                  style: TextStyle(color: Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7B2CBF),
-                minimumSize: const Size.fromHeight(36),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () => _openAuthDialog(),
-              icon: const Icon(Icons.person, color: Colors.white, size: 16),
-              label: const Text('Entrar / Cadastrar', style: TextStyle(color: Colors.white, fontSize: 12)),
-            ),
-          ],
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF7B2CBF),
+            minimumSize: const Size.fromHeight(38),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () => _openAuthDialog(),
+          icon: const Icon(Icons.person, color: Colors.white, size: 16),
+          label: const Text('Entrar / Cadastrar', style: TextStyle(color: Colors.white, fontSize: 12)),
         ),
       );
     }

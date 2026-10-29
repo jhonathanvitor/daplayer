@@ -85,7 +85,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
                         ),
                       ),
                       Text(
-                        'Banco SQLite Criptografado (AES-256)',
+                        'Acesse sua conta ou crie uma nova',
                         style: TextStyle(
                           color: Color(0xFF00F5D4),
                           fontSize: 11,

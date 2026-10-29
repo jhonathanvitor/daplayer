@@ -27,7 +27,6 @@ class GoogleAuthService {
   static String clientId =
       '788527234384-21h1oibuem5t2u0ov9u1nndrl7cj6kmm.apps.googleusercontent.com';
 
-  // Chave secreta carregada de oauth_config.json (ignorado no git) ou variável de ambiente
   static String clientSecret = const String.fromEnvironment('GOOGLE_CLIENT_SECRET', defaultValue: '');
 
   static const int redirectPort = 8585;
@@ -35,12 +34,21 @@ class GoogleAuthService {
 
   static Future<void> loadLocalConfig() async {
     try {
-      final file = File('oauth_config.json');
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        final data = json.decode(content) as Map<String, dynamic>;
-        if (data['client_id'] != null) clientId = data['client_id'];
-        if (data['client_secret'] != null) clientSecret = data['client_secret'];
+      final home = Platform.environment['HOME'] ?? '';
+      final execDir = File(Platform.resolvedExecutable).parent.path;
+      final candidates = [
+        File('oauth_config.json'),
+        File('$home/.config/daplayer/oauth_config.json'),
+        File('$execDir/oauth_config.json'),
+      ];
+      for (final file in candidates) {
+        if (await file.exists()) {
+          final content = await file.readAsString();
+          final data = json.decode(content) as Map<String, dynamic>;
+          if (data['client_id'] != null) clientId = data['client_id'];
+          if (data['client_secret'] != null) clientSecret = data['client_secret'];
+          break;
+        }
       }
     } catch (_) {}
   }
