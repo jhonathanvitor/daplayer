@@ -23,15 +23,23 @@ void main() {
   setUpAll(() {
     if (Platform.isLinux) {
       open.overrideFor(OperatingSystem.linux, () {
-        try {
-          return DynamicLibrary.open('libsqlite3.so.0');
-        } catch (_) {
-          return DynamicLibrary.open('libsqlite3.so');
+        final candidates = [
+          '/usr/lib/x86_64-linux-gnu/libsqlite3.so.0',
+          '/usr/lib/aarch64-linux-gnu/libsqlite3.so.0',
+          '${Platform.environment['HOME']}/.local/lib/libsqlite3.so',
+          'libsqlite3.so.0',
+          'libsqlite3.so',
+        ];
+        for (final candidate in candidates) {
+          try {
+            return DynamicLibrary.open(candidate);
+          } catch (_) {}
         }
+        return DynamicLibrary.open('libsqlite3.so');
       });
     }
     sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    databaseFactory = databaseFactoryFfiNoIsolate;
     PathProviderPlatform.instance = FakePathProviderPlatform();
   });
 

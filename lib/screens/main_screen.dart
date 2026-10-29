@@ -11,6 +11,7 @@ import '../widgets/bottom_player_bar.dart';
 import '../widgets/add_to_playlist_dialog.dart';
 import '../widgets/auth_dialog.dart';
 import '../widgets/google_connect_dialog.dart';
+import '../widgets/import_by_url_dialog.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -47,19 +48,57 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) return;
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    // Detecta se o usuário colou diretamente um link do YouTube (Vídeo ou Playlist)
+    if (YouTubeService.isYouTubeUrl(trimmed)) {
+      final playlistId = YouTubeService.extractPlaylistId(trimmed);
+      if (playlistId != null) {
+        _showImportByUrlDialog(context, initialUrl: trimmed);
+        return;
+      }
+
+      final videoId = YouTubeService.extractVideoId(trimmed);
+      if (videoId != null) {
+        setState(() {
+          _isSearching = true;
+          _selectedTabIndex = 1;
+        });
+
+        final track = await _ytService.getTrackFromUrl(trimmed);
+        if (mounted) {
+          setState(() {
+            _searchResults = track != null ? [track] : [];
+            _isSearching = false;
+          });
+        }
+        return;
+      }
+    }
+
     setState(() {
       _isSearching = true;
       _selectedTabIndex = 1; // Alterna para a aba de resultados
     });
 
-    final results = await _ytService.search(query);
+    final results = await _ytService.search(trimmed);
     if (mounted) {
       setState(() {
         _searchResults = results;
         _isSearching = false;
       });
     }
+  }
+
+  void _showImportByUrlDialog(BuildContext context, {String? initialPlaylistId, String? initialUrl}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => ImportByUrlDialog(
+        initialPlaylistId: initialPlaylistId,
+        initialUrl: initialUrl,
+      ),
+    );
   }
 
   @override
@@ -447,6 +486,18 @@ class _MainScreenState extends State<MainScreen> {
             icon: const Icon(Icons.search, color: Colors.white, size: 18),
             label: const Text('Buscar', style: TextStyle(color: Colors.white)),
           ),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF00F5D4),
+              side: const BorderSide(color: Color(0xFF00F5D4)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            onPressed: () => _showImportByUrlDialog(context),
+            icon: const Icon(Icons.link, size: 18),
+            label: const Text('Colar Link', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          ),
           const SizedBox(width: 14),
 
           // Botão de Conta / Perfil Criptografado
@@ -570,14 +621,29 @@ class _MainScreenState extends State<MainScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7B2CBF),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () => _showCreatePlaylistDialog(playlistService),
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Nova Coletânea', style: TextStyle(color: Colors.white)),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF00F5D4),
+                    side: const BorderSide(color: Color(0xFF00F5D4)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => _showImportByUrlDialog(context),
+                  icon: const Icon(Icons.link, size: 18),
+                  label: const Text('Importar por Link'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7B2CBF),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => _showCreatePlaylistDialog(playlistService),
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text('Nova Coletânea', style: TextStyle(color: Colors.white)),
+                ),
+              ],
             ),
           ],
         ),
@@ -630,6 +696,11 @@ class _MainScreenState extends State<MainScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              icon: const Icon(Icons.add_link, color: Color(0xFF00F5D4), size: 22),
+              tooltip: 'Adicionar música por link',
+              onPressed: () => _showImportByUrlDialog(context, initialPlaylistId: playlist.id),
+            ),
             if (playlist.tracks.isNotEmpty)
               IconButton(
                 icon: const Icon(Icons.play_circle_fill, color: Color(0xFF9D4EDD), size: 32),
@@ -645,11 +716,25 @@ class _MainScreenState extends State<MainScreen> {
         ),
         children: playlist.tracks.isEmpty
             ? [
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    'Coletânea vazia. Adicione músicas buscando no DaPlayer!',
-                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Coletânea vazia. ',
+                        style: TextStyle(color: Colors.white38, fontSize: 12),
+                      ),
+                      TextButton.icon(
+                        onPressed: () =>
+                            _showImportByUrlDialog(context, initialPlaylistId: playlist.id),
+                        icon: const Icon(Icons.add_link, size: 16, color: Color(0xFF00F5D4)),
+                        label: const Text(
+                          'Adicionar música por link',
+                          style: TextStyle(color: Color(0xFF00F5D4), fontSize: 12),
+                        ),
+                      ),
+                    ],
                   ),
                 )
               ]

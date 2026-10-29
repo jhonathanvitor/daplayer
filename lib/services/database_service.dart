@@ -19,13 +19,21 @@ class DatabaseService {
     // Configura o FFI no Desktop (Linux, Windows, macOS)
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       if (Platform.isLinux) {
-        // No Ubuntu/Debian, o pacote libsqlite3-0 provê libsqlite3.so.0
+        // No Ubuntu/Debian, o pacote libsqlite3-0 provê /usr/lib/x86_64-linux-gnu/libsqlite3.so.0
         open.overrideFor(OperatingSystem.linux, () {
-          try {
-            return DynamicLibrary.open('libsqlite3.so.0');
-          } catch (_) {
-            return DynamicLibrary.open('libsqlite3.so');
+          final candidates = [
+            '/usr/lib/x86_64-linux-gnu/libsqlite3.so.0',
+            '/usr/lib/aarch64-linux-gnu/libsqlite3.so.0',
+            '${Platform.environment['HOME']}/.local/lib/libsqlite3.so',
+            'libsqlite3.so.0',
+            'libsqlite3.so',
+          ];
+          for (final candidate in candidates) {
+            try {
+              return DynamicLibrary.open(candidate);
+            } catch (_) {}
           }
+          return DynamicLibrary.open('libsqlite3.so');
         });
       }
 

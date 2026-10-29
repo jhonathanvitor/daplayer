@@ -55,6 +55,12 @@ class PlaylistService extends ChangeNotifier {
     return newPlaylist;
   }
 
+  Future<void> addPlaylist(Playlist playlist) async {
+    _playlists.add(playlist);
+    await _saveToStorage();
+    notifyListeners();
+  }
+
   Future<void> deletePlaylist(String playlistId) async {
     _playlists.removeWhere((p) => p.id == playlistId);
     await _saveToStorage();
