@@ -25,9 +25,11 @@ class _GoogleConnectDialogState extends State<GoogleConnectDialog> {
     return Dialog(
       backgroundColor: const Color(0xFF161622),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
-        width: 460,
-        padding: const EdgeInsets.all(28),
+        constraints: const BoxConstraints(maxWidth: 460),
+        width: MediaQuery.of(context).size.width,
+        padding: const EdgeInsets.all(22),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -30,12 +30,14 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
     return AlertDialog(
       backgroundColor: const Color(0xFF1E1E2C),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: Text(
         _isCreatingNew ? 'Criar Nova Coletânea' : 'Adicionar à Coletânea',
         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
       ),
-      content: SizedBox(
-        width: 400,
+      content: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        width: MediaQuery.of(context).size.width,
         child: _isCreatingNew
             ? TextField(
                 controller: _nameController,

@@ -121,9 +121,9 @@ class _MainScreenState extends State<MainScreen> {
           child: IndexedStack(
             index: _selectedTabIndex,
             children: [
-              _buildTrendingView(playerService),
-              _buildSearchResultsView(playerService),
-              _buildMyPlaylistsView(playerService),
+              _buildTrendingView(playerService, isMobile: isMobile),
+              _buildSearchResultsView(playerService, isMobile: isMobile),
+              _buildMyPlaylistsView(playerService, isMobile: isMobile),
             ],
           ),
         ),
@@ -499,9 +499,14 @@ class _MainScreenState extends State<MainScreen> {
                 controller: _searchController,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: 'Buscar músicas, coletâneas, artistas no YouTube...',
+                  hintText: isMobile
+                      ? 'Buscar no YouTube...'
+                      : 'Buscar músicas, coletâneas, artistas no YouTube...',
                   hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54, size: 20),
+                  prefixIcon: IconButton(
+                    icon: const Icon(Icons.search, color: Colors.white54, size: 20),
+                    onPressed: () => _performSearch(_searchController.text),
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
@@ -518,57 +523,75 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 14),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7B2CBF),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          if (isMobile) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.link, color: Color(0xFF00F5D4), size: 22),
+              tooltip: 'Colar Link',
+              onPressed: () => _showImportByUrlDialog(context),
             ),
-            onPressed: () => _performSearch(_searchController.text),
-            icon: const Icon(Icons.search, color: Colors.white, size: 18),
-            label: const Text('Buscar', style: TextStyle(color: Colors.white)),
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF00F5D4),
-              side: const BorderSide(color: Color(0xFF00F5D4)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            IconButton(
+              icon: Icon(
+                auth.isAuthenticated ? Icons.account_circle : Icons.person_outline,
+                color: auth.isAuthenticated ? const Color(0xFF00F5D4) : Colors.white70,
+                size: 24,
+              ),
+              tooltip: auth.isAuthenticated ? auth.currentUser!.name : 'Entrar',
+              onPressed: () => _openAuthDialog(),
             ),
-            onPressed: () => _showImportByUrlDialog(context),
-            icon: const Icon(Icons.link, size: 18),
-            label: const Text('Colar Link', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 14),
+          ] else ...[
+            const SizedBox(width: 14),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7B2CBF),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              ),
+              onPressed: () => _performSearch(_searchController.text),
+              icon: const Icon(Icons.search, color: Colors.white, size: 18),
+              label: const Text('Buscar', style: TextStyle(color: Colors.white)),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF00F5D4),
+                side: const BorderSide(color: Color(0xFF00F5D4)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+              onPressed: () => _showImportByUrlDialog(context),
+              icon: const Icon(Icons.link, size: 18),
+              label: const Text('Colar Link', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 14),
 
-          // Botão de Conta / Perfil Criptografado
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: auth.isAuthenticated
-                    ? const Color(0xFF00F5D4).withValues(alpha: 0.6)
-                    : Colors.white24,
+            // Botão de Conta / Perfil Criptografado
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: auth.isAuthenticated
+                      ? const Color(0xFF00F5D4).withValues(alpha: 0.6)
+                      : Colors.white24,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-            onPressed: () => _openAuthDialog(),
-            icon: Icon(
-              auth.isAuthenticated ? Icons.verified_user : Icons.lock_outline,
-              color: auth.isAuthenticated ? const Color(0xFF00F5D4) : Colors.white70,
-              size: 18,
-            ),
-            label: Text(
-              auth.isAuthenticated ? auth.currentUser!.name : 'Entrar',
-              style: TextStyle(
-                color: auth.isAuthenticated ? Colors.white : Colors.white70,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
+              onPressed: () => _openAuthDialog(),
+              icon: Icon(
+                auth.isAuthenticated ? Icons.verified_user : Icons.lock_outline,
+                color: auth.isAuthenticated ? const Color(0xFF00F5D4) : Colors.white70,
+                size: 18,
+              ),
+              label: Text(
+                auth.isAuthenticated ? auth.currentUser!.name : 'Entrar',
+                style: TextStyle(
+                  color: auth.isAuthenticated ? Colors.white : Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -582,7 +605,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // Visualização de Coletâneas / Tendências
-  Widget _buildTrendingView(AudioPlayerService playerService) {
+  Widget _buildTrendingView(AudioPlayerService playerService, {bool isMobile = false}) {
     if (_isLoadingTrending) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF9D4EDD)),
@@ -590,29 +613,29 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isMobile ? 14 : 24),
       children: [
-        const Text(
+        Text(
           '🔥 Coletâneas & Músicas em Destaque',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 22,
+            fontSize: isMobile ? 18 : 22,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         const Text(
           'Toque em qualquer faixa para ouvir o áudio diretamente do YouTube em alta qualidade',
-          style: TextStyle(color: Colors.white54, fontSize: 13),
+          style: TextStyle(color: Colors.white54, fontSize: 12),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         ..._trendingTracks.map((t) => _buildTrackTile(t, playerService, _trendingTracks)),
       ],
     );
   }
 
   // Visualização de Resultados da Busca
-  Widget _buildSearchResultsView(AudioPlayerService playerService) {
+  Widget _buildSearchResultsView(AudioPlayerService playerService, {bool isMobile = false}) {
     if (_isSearching) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF9D4EDD)),
@@ -629,68 +652,110 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isMobile ? 14 : 24),
       children: [
         Text(
           'Resultados da busca por "${_searchController.text}"',
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 18,
+            fontSize: isMobile ? 16 : 18,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         ..._searchResults.map((t) => _buildTrackTile(t, playerService, _searchResults)),
       ],
     );
   }
 
   // Visualização de Minhas Coletâneas
-  Widget _buildMyPlaylistsView(AudioPlayerService playerService) {
+  Widget _buildMyPlaylistsView(AudioPlayerService playerService, {bool isMobile = false}) {
     final playlistService = Provider.of<PlaylistService>(context);
     final playlists = playlistService.playlists;
 
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isMobile ? 14 : 24),
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              '📁 Minhas Coletâneas',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+        if (isMobile) ...[
+          const Text(
+            '📁 Minhas Coletâneas',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
             ),
-            Row(
-              children: [
-                OutlinedButton.icon(
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF00F5D4),
                     side: const BorderSide(color: Color(0xFF00F5D4)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   onPressed: () => _showImportByUrlDialog(context),
-                  icon: const Icon(Icons.link, size: 18),
-                  label: const Text('Importar por Link'),
+                  icon: const Icon(Icons.link, size: 16),
+                  label: const Text('Importar Link', style: TextStyle(fontSize: 12)),
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF7B2CBF),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   onPressed: () => _showCreatePlaylistDialog(playlistService),
-                  icon: const Icon(Icons.add, color: Colors.white),
-                  label: const Text('Nova Coletânea', style: TextStyle(color: Colors.white)),
+                  icon: const Icon(Icons.add, color: Colors.white, size: 16),
+                  label: const Text('Nova Coletânea', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
+              ),
+            ],
+          ),
+        ] else ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '📁 Minhas Coletâneas',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00F5D4),
+                      side: const BorderSide(color: Color(0xFF00F5D4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _showImportByUrlDialog(context),
+                    icon: const Icon(Icons.link, size: 18),
+                    label: const Text('Importar por Link'),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7B2CBF),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _showCreatePlaylistDialog(playlistService),
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    label: const Text('Nova Coletânea', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 16),
         if (playlists.isEmpty)
           const Center(
             child: Padding(

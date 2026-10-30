@@ -64,9 +64,11 @@ class _ImportByUrlDialogState extends State<ImportByUrlDialog> with SingleTicker
     return Dialog(
       backgroundColor: const Color(0xFF161622),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
-        width: 480,
-        padding: const EdgeInsets.all(26),
+        constraints: const BoxConstraints(maxWidth: 480),
+        width: MediaQuery.of(context).size.width,
+        padding: const EdgeInsets.all(22),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
