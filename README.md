@@ -1,16 +1,19 @@
 # daplayer
 
-A new Flutter project.
+<img width="1859" height="1025" alt="dplayer" src="https://github.com/user-attachments/assets/5b16fe79-d458-4615-8d7d-55a1ef5a434a" />
 
-## Getting Started
 
-This project is a starting point for a Flutter application.
+Um novo projeto de Musicas mp3.
 
-A few resources to get you started if this is your first Flutter project:
+## Primeiros passos
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Este projeto é um ponto de partida para um aplicativo Flutter.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Aqui estão alguns recursos para ajudar você a começar, caso este seja o seu primeiro projeto Flutter:
+
+- [Laboratório: Crie seu primeiro aplicativo Flutter](https://docs.flutter.dev/get-started/codelab)
+- [Cookbook: Exemplos úteis em Flutter](https://docs.flutter.dev/cookbook)
+
+Para obter ajuda sobre como começar a desenvolver com Flutter, consulte a
+[documentação online](https://docs.flutter.dev/), que oferece tutoriais,
+exemplos, orientações sobre desenvolvimento móvel e uma referência completa da API.
