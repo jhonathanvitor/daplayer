@@ -6,12 +6,14 @@ import '../models/playlist.dart';
 import 'youtube_service.dart';
 import 'tray_service.dart';
 import 'linux_gst_player.dart';
+import 'mobile_audio_handler.dart';
 
 class AudioPlayerService extends ChangeNotifier {
   final AudioPlayer? _justAudioPlayer = !Platform.isLinux ? AudioPlayer() : null;
   final LinuxGstPlayer? _gstPlayer = Platform.isLinux ? LinuxGstPlayer() : null;
   final YouTubeService _ytService;
   final TrayService _trayService;
+  DaPlayerAudioHandler? _mobileHandler;
 
   Track? _currentTrack;
   List<Track> _queue = [];
@@ -75,6 +77,7 @@ class AudioPlayerService extends ChangeNotifier {
         if (_isPlaying != playing) {
           _isPlaying = playing;
           _updateTray();
+          _updateMobileMedia();
           notifyListeners();
         }
 
@@ -85,11 +88,13 @@ class AudioPlayerService extends ChangeNotifier {
 
       _justAudioPlayer.positionStream.listen((pos) {
         _position = pos;
+        _updateMobileMedia();
         notifyListeners();
       });
 
       _justAudioPlayer.durationStream.listen((dur) {
         _duration = dur ?? Duration.zero;
+        _updateMobileMedia();
         notifyListeners();
       });
     }
@@ -103,6 +108,11 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
 
     _updateTray();
+    if (_mobileHandler != null) {
+      final hasNext = _queue.isNotEmpty && _currentIndex + 1 < _queue.length;
+      final hasPrevious = _queue.isNotEmpty && _currentIndex > 0;
+      _mobileHandler!.updateTrack(track, hasNext: hasNext, hasPrevious: hasPrevious);
+    }
 
     try {
       final audioUrl = await _ytService.getAudioOnlyStreamUrl(track.id);
@@ -125,6 +135,7 @@ class AudioPlayerService extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       _updateTray();
+      _updateMobileMedia();
     }
   }
 
@@ -159,6 +170,7 @@ class AudioPlayerService extends ChangeNotifier {
     }
     _isPlaying = false;
     _updateTray();
+    _updateMobileMedia();
     notifyListeners();
   }
 
@@ -170,6 +182,7 @@ class AudioPlayerService extends ChangeNotifier {
     }
     _isPlaying = true;
     _updateTray();
+    _updateMobileMedia();
     notifyListeners();
   }
 
@@ -199,7 +212,27 @@ class AudioPlayerService extends ChangeNotifier {
     } else if (_justAudioPlayer != null) {
       await _justAudioPlayer.seek(pos);
     }
+    _updateMobileMedia();
     notifyListeners();
+  }
+
+  void attachMobileHandler(DaPlayerAudioHandler handler) {
+    _mobileHandler = handler;
+  }
+
+  void _updateMobileMedia() {
+    if (_mobileHandler != null && _currentTrack != null) {
+      final hasNext = _queue.isNotEmpty && _currentIndex + 1 < _queue.length;
+      final hasPrevious = _queue.isNotEmpty && _currentIndex > 0;
+      _mobileHandler!.updatePlaybackState(
+        isPlaying: _isPlaying,
+        position: _position,
+        bufferedPosition: _position,
+        hasNext: hasNext,
+        hasPrevious: hasPrevious,
+        isLoading: _isLoading,
+      );
+    }
   }
 
   Future<void> setVolume(double vol) async {
