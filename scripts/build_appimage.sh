@@ -75,10 +75,19 @@ mkdir -p "$OUTPUT_DIR"
 cp -r "$BUILD_DIR"/* "$APPDIR/"
 
 # Garante a biblioteca sqlite3 embutida no pacote AppImage
-if [ -f "$HOME/.local/lib/libsqlite3.so" ]; then
-    mkdir -p "$APPDIR/lib"
-    cp "$HOME/.local/lib/libsqlite3.so" "$APPDIR/lib/libsqlite3.so"
-fi
+mkdir -p "$APPDIR/lib"
+for sqlite_candidate in \
+    "/usr/lib/x86_64-linux-gnu/libsqlite3.so.0" \
+    "/usr/lib/aarch64-linux-gnu/libsqlite3.so.0" \
+    "/usr/lib/libsqlite3.so.0" \
+    "/usr/lib64/libsqlite3.so.0" \
+    "$HOME/.local/lib/libsqlite3.so"; do
+    if [ -f "$sqlite_candidate" ]; then
+        cp -L "$sqlite_candidate" "$APPDIR/lib/libsqlite3.so" 2>/dev/null || true
+        cp -L "$sqlite_candidate" "$APPDIR/lib/libsqlite3.so.0" 2>/dev/null || true
+        break
+    fi
+done
 
 # Copia ícones
 if [ -f "$PROJECT_DIR/assets/icon.png" ]; then

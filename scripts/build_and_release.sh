@@ -54,6 +54,21 @@ if [ ! -d "$BUILD_DIR" ]; then
     exit 1
 fi
 
+# Garante libsqlite3 no bundle para que todos os formatos incluam a biblioteca
+mkdir -p "$BUILD_DIR/lib"
+for sqlite_candidate in \
+    "/usr/lib/x86_64-linux-gnu/libsqlite3.so.0" \
+    "/usr/lib/aarch64-linux-gnu/libsqlite3.so.0" \
+    "/usr/lib/libsqlite3.so.0" \
+    "/usr/lib64/libsqlite3.so.0" \
+    "$HOME/.local/lib/libsqlite3.so"; do
+    if [ -f "$sqlite_candidate" ]; then
+        cp -L "$sqlite_candidate" "$BUILD_DIR/lib/libsqlite3.so" 2>/dev/null || true
+        cp -L "$sqlite_candidate" "$BUILD_DIR/lib/libsqlite3.so.0" 2>/dev/null || true
+        break
+    fi
+done
+
 # 3. Gerar .tar.gz
 echo ""
 echo ">> [2/5] Gerando arquivo portátil .tar.gz..."
@@ -122,6 +137,9 @@ $FPM_BIN -s dir -t deb \
     -n "$APP_NAME" \
     -v "$VERSION" \
     -a "amd64" \
+    -d "libsqlite3-0" \
+    -d "libgstreamer1.0-0" \
+    -d "libgstreamer-plugins-base1.0-0" \
     --description "DaPlayer - Player de Coletâneas e Músicas do YouTube" \
     -C "$STAGING_DIR" \
     -p "$DEB_FILE" .
@@ -134,6 +152,8 @@ $FPM_BIN -s dir -t rpm \
     -n "$APP_NAME" \
     -v "$VERSION" \
     -a "x86_64" \
+    -d "sqlite-libs" \
+    -d "gstreamer1" \
     --description "DaPlayer - Player de Coletâneas e Músicas do YouTube" \
     -C "$STAGING_DIR" \
     -p "$RPM_FILE" .

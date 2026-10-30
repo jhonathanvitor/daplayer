@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' hide Playlist;
 import '../models/track.dart';
 import '../models/playlist.dart';
@@ -34,10 +36,103 @@ class YouTubeService {
     return text.contains('youtube.com') || text.contains('youtu.be');
   }
 
-  /// Busca músicas ou coletâneas no YouTube
-  Future<List<Track>> search(String query) async {
+  /// Converte string de duração (ex: '3:45' ou '1:02:30') em Duration com segurança
+  static Duration _parseDurationString(String text) {
     try {
-      final searchList = await _yt.search.search(query);
+      final parts = text.trim().split(':');
+      if (parts.length == 2) {
+        final m = int.parse(parts[0]);
+        final s = int.parse(parts[1]);
+        return Duration(minutes: m, seconds: s);
+      } else if (parts.length == 3) {
+        final h = int.parse(parts[0]);
+        final m = int.parse(parts[1]);
+        final s = int.parse(parts[2]);
+        return Duration(hours: h, minutes: m, seconds: s);
+      }
+    } catch (_) {}
+    return Duration.zero;
+  }
+
+  /// Busca músicas ou coletâneas no YouTube usando Innertube API com fallback
+  Future<List<Track>> search(String query) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return [];
+
+    // 1. Busca nativa via Innertube API (rápida, sem problemas de parsing ou locale)
+    try {
+      final url = Uri.parse('https://www.youtube.com/youtubei/v1/search?prettyPrint=false');
+      final body = json.encode({
+        'context': {
+          'client': {
+            'clientName': 'WEB',
+            'clientVersion': '2.20240101.00.00',
+            'hl': 'pt',
+            'gl': 'BR',
+          }
+        },
+        'query': cleanQuery,
+        'params': 'EgIQAQ%3D%3D', // Filtro: Vídeos
+      });
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final contents = data['contents']?['twoColumnSearchResultsRenderer']?['primaryContents']?['sectionListRenderer']?['contents'];
+        if (contents is List) {
+          final tracks = <Track>[];
+          for (final section in contents) {
+            final itemSection = section['itemSectionRenderer']?['contents'];
+            if (itemSection is List) {
+              for (final item in itemSection) {
+                final vr = item['videoRenderer'];
+                if (vr != null) {
+                  final videoId = vr['videoId'] as String?;
+                  if (videoId == null || videoId.isEmpty) continue;
+
+                  final title = (vr['title']?['runs']?[0]?['text'] ?? vr['title']?['simpleText'] ?? '') as String;
+                  final author = (vr['ownerText']?['runs']?[0]?['text'] ?? vr['longBylineText']?['runs']?[0]?['text'] ?? '') as String;
+                  final durationStr = (vr['lengthText']?['simpleText'] ?? vr['lengthText']?['runs']?[0]?['text'] ?? '') as String;
+
+                  // Se for transmissão ao vivo ativa (sem duração definida), ignora
+                  final isLive = vr['badges']?.toString().contains('LIVE') == true || durationStr.isEmpty;
+                  if (isLive) continue;
+
+                  final duration = _parseDurationString(durationStr);
+
+                  tracks.add(
+                    Track(
+                      id: videoId,
+                      title: title,
+                      artist: author,
+                      thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+                      duration: duration,
+                    ),
+                  );
+                }
+              }
+            }
+          }
+          if (tracks.isNotEmpty) {
+            return tracks;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Aviso: busca via Innertube falhou ($e), tentando fallback...');
+    }
+
+    // 2. Fallback via YoutubeExplode
+    try {
+      final searchList = await _yt.search.search(cleanQuery);
       final tracks = <Track>[];
 
       for (final video in searchList) {

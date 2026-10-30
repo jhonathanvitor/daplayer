@@ -9,10 +9,12 @@ import 'services/audio_player_service.dart';
 import 'services/playlist_service.dart';
 import 'repositories/auth_repository.dart';
 import 'providers/auth_provider.dart';
+import 'services/database_service.dart';
 import 'screens/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  DatabaseService.initialize();
 
   final ytService = YouTubeService();
   final trayService = TrayService();

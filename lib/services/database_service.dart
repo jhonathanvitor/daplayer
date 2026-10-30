@@ -6,8 +6,43 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqlite3/open.dart';
 
+/// Inicialização do FFI para SQLite em sistemas Desktop
+void _linuxSqliteFfiInit() {
+  if (Platform.isLinux) {
+    open.overrideFor(OperatingSystem.linux, () {
+      final candidates = [
+        '/usr/lib/x86_64-linux-gnu/libsqlite3.so.0',
+        '/usr/lib/aarch64-linux-gnu/libsqlite3.so.0',
+        '/usr/lib/libsqlite3.so.0',
+        '${Platform.environment['HOME']}/.local/lib/libsqlite3.so',
+        'libsqlite3.so.0',
+        'libsqlite3.so',
+      ];
+      for (final candidate in candidates) {
+        try {
+          return DynamicLibrary.open(candidate);
+        } catch (_) {}
+      }
+      return DynamicLibrary.open('libsqlite3.so.0');
+    });
+  }
+}
+
 class DatabaseService {
   static Database? _database;
+  static bool _initializedFactory = false;
+
+  /// Inicializa a fábrica de banco de dados FFI para Desktop
+  static void initialize() {
+    if (_initializedFactory) return;
+
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      _linuxSqliteFfiInit();
+      sqfliteFfiInit();
+      databaseFactory = createDatabaseFactoryFfi(ffiInit: _linuxSqliteFfiInit);
+    }
+    _initializedFactory = true;
+  }
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -16,30 +51,7 @@ class DatabaseService {
   }
 
   static Future<Database> _initDatabase() async {
-    // Configura o FFI no Desktop (Linux, Windows, macOS)
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      if (Platform.isLinux) {
-        // No Ubuntu/Debian, o pacote libsqlite3-0 provê /usr/lib/x86_64-linux-gnu/libsqlite3.so.0
-        open.overrideFor(OperatingSystem.linux, () {
-          final candidates = [
-            '/usr/lib/x86_64-linux-gnu/libsqlite3.so.0',
-            '/usr/lib/aarch64-linux-gnu/libsqlite3.so.0',
-            '${Platform.environment['HOME']}/.local/lib/libsqlite3.so',
-            'libsqlite3.so.0',
-            'libsqlite3.so',
-          ];
-          for (final candidate in candidates) {
-            try {
-              return DynamicLibrary.open(candidate);
-            } catch (_) {}
-          }
-          return DynamicLibrary.open('libsqlite3.so');
-        });
-      }
-
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-    }
+    initialize();
 
     try {
       final directory = await getApplicationSupportDirectory();
