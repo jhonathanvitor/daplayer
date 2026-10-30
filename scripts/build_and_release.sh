@@ -172,6 +172,10 @@ FILES_TO_UPLOAD=(
     "$RPM_FILE"
 )
 
+if [ -f "$OUTPUT_DIR/DaPlayer.apk" ]; then
+    FILES_TO_UPLOAD+=("$OUTPUT_DIR/DaPlayer.apk")
+fi
+
 if [ -z "$TOKEN" ]; then
     echo "=========================================================="
     echo " ⚠️  Nenhum Token do GitHub detectado para envio automático."

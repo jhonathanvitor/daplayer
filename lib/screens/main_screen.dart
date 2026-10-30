@@ -112,41 +112,77 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final playerService = Provider.of<AudioPlayerService>(context);
     final auth = Provider.of<AuthProvider>(context);
+    final isMobile = MediaQuery.of(context).size.width < 720;
+
+    final mainContent = Column(
+      children: [
+        _buildTopHeader(auth, isMobile: isMobile),
+        Expanded(
+          child: IndexedStack(
+            index: _selectedTabIndex,
+            children: [
+              _buildTrendingView(playerService),
+              _buildSearchResultsView(playerService),
+              _buildMyPlaylistsView(playerService),
+            ],
+          ),
+        ),
+        const BottomPlayerBar(),
+      ],
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F17),
-      body: Row(
-        children: [
-          // Barra Lateral (Sidebar)
-          _buildSidebar(auth),
-
-          // Conteúdo Principal
-          Expanded(
-            child: Column(
+      drawer: isMobile
+          ? Drawer(
+              backgroundColor: const Color(0xFF161622),
+              child: SafeArea(
+                child: _buildSidebar(auth, isDrawer: true),
+              ),
+            )
+          : null,
+      bottomNavigationBar: isMobile ? _buildMobileNavBar() : null,
+      body: isMobile
+          ? SafeArea(child: mainContent)
+          : Row(
               children: [
-                _buildTopHeader(auth),
-                Expanded(
-                  child: IndexedStack(
-                    index: _selectedTabIndex,
-                    children: [
-                      _buildTrendingView(playerService),
-                      _buildSearchResultsView(playerService),
-                      _buildMyPlaylistsView(playerService),
-                    ],
-                  ),
-                ),
-                const BottomPlayerBar(),
+                _buildSidebar(auth),
+                Expanded(child: mainContent),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildSidebar(AuthProvider auth) {
+  Widget _buildMobileNavBar() {
+    return BottomNavigationBar(
+      backgroundColor: const Color(0xFF161622),
+      selectedItemColor: const Color(0xFF9D4EDD),
+      unselectedItemColor: Colors.white54,
+      currentIndex: _selectedTabIndex,
+      onTap: (index) => setState(() => _selectedTabIndex = index),
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.explore_outlined),
+          activeIcon: Icon(Icons.explore),
+          label: 'Descobrir',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.search_outlined),
+          activeIcon: Icon(Icons.search),
+          label: 'Busca',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.library_music_outlined),
+          activeIcon: Icon(Icons.library_music),
+          label: 'Coletâneas',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSidebar(AuthProvider auth, {bool isDrawer = false}) {
     return Container(
-      width: 250,
+      width: isDrawer ? null : 250,
       color: const Color(0xFF161622),
       child: Column(
         children: [
@@ -198,18 +234,21 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icons.explore_outlined,
             activeIcon: Icons.explore,
             title: 'Descobrir',
+            isDrawer: isDrawer,
           ),
           _sidebarItem(
             index: 1,
             icon: Icons.search_outlined,
             activeIcon: Icons.search,
             title: 'Busca',
+            isDrawer: isDrawer,
           ),
           _sidebarItem(
             index: 2,
             icon: Icons.library_music_outlined,
             activeIcon: Icons.library_music,
             title: 'Minhas Coletâneas',
+            isDrawer: isDrawer,
           ),
 
           const Spacer(),
@@ -400,6 +439,7 @@ class _MainScreenState extends State<MainScreen> {
     required IconData icon,
     required IconData activeIcon,
     required String title,
+    bool isDrawer = false,
   }) {
     final isSelected = _selectedTabIndex == index;
     return ListTile(
@@ -418,16 +458,34 @@ class _MainScreenState extends State<MainScreen> {
       selectedTileColor: const Color(0xFF26263B),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-      onTap: () => setState(() => _selectedTabIndex = index),
+      onTap: () {
+        setState(() => _selectedTabIndex = index);
+        if (isDrawer) {
+          Navigator.of(context).maybePop();
+        }
+      },
     );
   }
 
-  Widget _buildTopHeader(AuthProvider auth) {
+  Widget _buildTopHeader(AuthProvider auth, {bool isMobile = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 24,
+        vertical: isMobile ? 10 : 16,
+      ),
       color: const Color(0xFF12121B),
       child: Row(
         children: [
+          if (isMobile) ...[
+            Builder(
+              builder: (ctx) => IconButton(
+                icon: const Icon(Icons.menu, color: Colors.white70),
+                onPressed: () => Scaffold.of(ctx).openDrawer(),
+                tooltip: 'Menu',
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
           // Campo de Busca
           Expanded(
             child: Container(

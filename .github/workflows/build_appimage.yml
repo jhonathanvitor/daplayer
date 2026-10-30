@@ -1,4 +1,4 @@
-name: Build & Release DaPlayer (AppImage, Deb, Rpm, Tar.gz)
+name: Build & Release DaPlayer (Linux & Android APK)
 
 on:
   push:
@@ -21,6 +21,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -37,6 +43,12 @@ jobs:
       - name: Install Pub Dependencies
         run: flutter pub get
 
+      - name: Build Android APK
+        run: |
+          flutter build apk --release
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/DaPlayer.apk
+
       - name: Build All Linux Packages & Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,8 +59,9 @@ jobs:
       - name: Upload Artifacts to Workflow
         uses: actions/upload-artifact@v4
         with:
-          name: DaPlayer-Linux-Packages
+          name: DaPlayer-Packages
           path: |
+            dist/DaPlayer.apk
             dist/DaPlayer-x86_64.AppImage
             dist/*.tar.gz
             dist/*.deb

@@ -16,6 +16,8 @@ class BottomPlayerBar extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final isNarrow = MediaQuery.of(context).size.width < 600;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
@@ -172,41 +174,42 @@ class BottomPlayerBar extends StatelessWidget {
                   ],
                 ),
 
-                const SizedBox(width: 24),
-
-                // Controle de Volume
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      playerService.volume == 0
-                          ? Icons.volume_off
-                          : playerService.volume < 0.5
-                              ? Icons.volume_down
-                              : Icons.volume_up,
-                      color: Colors.white54,
-                      size: 20,
-                    ),
-                    SizedBox(
-                      width: 90,
-                      child: SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                          trackHeight: 3,
-                          activeTrackColor: Colors.white,
-                          inactiveTrackColor: Colors.white12,
-                          thumbColor: Colors.white,
-                        ),
-                        child: Slider(
-                          value: playerService.volume,
-                          min: 0.0,
-                          max: 1.0,
-                          onChanged: (val) => playerService.setVolume(val),
+                if (!isNarrow) ...[
+                  const SizedBox(width: 16),
+                  // Controle de Volume (Oculto em telas de celular)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        playerService.volume == 0
+                            ? Icons.volume_off
+                            : playerService.volume < 0.5
+                                ? Icons.volume_down
+                                : Icons.volume_up,
+                        color: Colors.white54,
+                        size: 20,
+                      ),
+                      SizedBox(
+                        width: 90,
+                        child: SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                            trackHeight: 3,
+                            activeTrackColor: Colors.white,
+                            inactiveTrackColor: Colors.white12,
+                            thumbColor: Colors.white,
+                          ),
+                          child: Slider(
+                            value: playerService.volume,
+                            min: 0.0,
+                            max: 1.0,
+                            onChanged: (val) => playerService.setVolume(val),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ],
