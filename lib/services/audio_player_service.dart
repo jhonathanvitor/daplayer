@@ -113,7 +113,7 @@ class AudioPlayerService extends ChangeNotifier {
           _isPlaying = true;
         } else if (_justAudioPlayer != null) {
           await _justAudioPlayer.setUrl(audioUrl);
-          await _justAudioPlayer.play();
+          _justAudioPlayer.play();
           _isPlaying = true;
         }
       } else {
@@ -166,7 +166,7 @@ class AudioPlayerService extends ChangeNotifier {
     if (Platform.isLinux && _gstPlayer != null) {
       await _gstPlayer.play();
     } else if (_justAudioPlayer != null) {
-      await _justAudioPlayer.play();
+      _justAudioPlayer.play();
     }
     _isPlaying = true;
     _updateTray();

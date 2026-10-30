@@ -126,44 +126,40 @@ class BottomPlayerBar extends StatelessWidget {
                       onPressed: () => playerService.previous(),
                     ),
                     const SizedBox(width: 6),
-                    if (playerService.isLoading)
-                      const SizedBox(
+                    GestureDetector(
+                      onTap: () => playerService.togglePlayPause(),
+                      child: Container(
                         width: 44,
                         height: 44,
-                        child: Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
-                        ),
-                      )
-                    else
-                      GestureDetector(
-                        onTap: () => playerService.togglePlayPause(),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Icon(
-                              playerService.isPlaying ? Icons.pause : Icons.play_arrow,
-                              color: Colors.black,
-                              size: 26,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
                             ),
-                          ),
+                          ],
+                        ),
+                        child: Center(
+                          child: playerService.isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                    color: Colors.black87,
+                                  ),
+                                )
+                              : Icon(
+                                  playerService.isPlaying ? Icons.pause : Icons.play_arrow,
+                                  color: Colors.black,
+                                  size: 26,
+                                ),
                         ),
                       ),
+                    ),
                     const SizedBox(width: 6),
                     IconButton(
                       icon: const Icon(Icons.skip_next, color: Colors.white),
