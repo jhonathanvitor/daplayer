@@ -9,7 +9,13 @@ import 'linux_gst_player.dart';
 import 'mobile_audio_handler.dart';
 
 class AudioPlayerService extends ChangeNotifier {
-  final AudioPlayer? _justAudioPlayer = !Platform.isLinux ? AudioPlayer() : null;
+  final AudioPlayer? _justAudioPlayer = !Platform.isLinux
+      ? AudioPlayer(
+          handleInterruptions: false,
+          androidApplyAudioAttributes: false,
+          handleAudioSessionActivation: false,
+        )
+      : null;
   final LinuxGstPlayer? _gstPlayer = Platform.isLinux ? LinuxGstPlayer() : null;
   final YouTubeService _ytService;
   final TrayService _trayService;
@@ -73,6 +79,7 @@ class AudioPlayerService extends ChangeNotifier {
       };
     } else if (_justAudioPlayer != null) {
       _justAudioPlayer.playerStateStream.listen((state) {
+        if (_isLoading) return;
         final playing = state.playing && state.processingState != ProcessingState.completed;
         if (_isPlaying != playing) {
           _isPlaying = playing;
@@ -88,13 +95,14 @@ class AudioPlayerService extends ChangeNotifier {
 
       _justAudioPlayer.positionStream.listen((pos) {
         _position = pos;
-        _updateMobileMedia();
         notifyListeners();
       });
 
       _justAudioPlayer.durationStream.listen((dur) {
         _duration = dur ?? Duration.zero;
-        _updateMobileMedia();
+        if (!_isLoading) {
+          _updateMobileMedia();
+        }
         notifyListeners();
       });
     }
@@ -103,6 +111,7 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> playTrack(Track track) async {
     _currentTrack = track;
     _isLoading = true;
+    _isPlaying = true;
     _position = Duration.zero;
     _duration = track.duration;
     notifyListeners();

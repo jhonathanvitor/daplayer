@@ -64,7 +64,7 @@ class DaPlayerAudioHandler extends BaseAudioHandler with SeekHandler {
         androidCompactActionIndices: compactIndices,
         processingState: isLoading
             ? AudioProcessingState.loading
-            : (isPlaying ? AudioProcessingState.ready : AudioProcessingState.idle),
+            : AudioProcessingState.ready,
         playing: isPlaying,
         updatePosition: position,
         bufferedPosition: bufferedPosition,
@@ -100,6 +100,12 @@ class DaPlayerAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() async {
     if (onPause != null) await onPause!();
+    playbackState.add(
+      playbackState.value.copyWith(
+        processingState: AudioProcessingState.idle,
+        playing: false,
+      ),
+    );
     await super.stop();
   }
 }
