@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -14,6 +15,14 @@ class AudioPlayerService extends ChangeNotifier {
           handleInterruptions: false,
           androidApplyAudioAttributes: false,
           handleAudioSessionActivation: false,
+          audioLoadConfiguration: const AudioLoadConfiguration(
+            androidLoadControl: AndroidLoadControl(
+              minBufferDuration: Duration(seconds: 25),
+              maxBufferDuration: Duration(seconds: 120),
+              bufferForPlaybackDuration: Duration(milliseconds: 1000),
+              bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
+            ),
+          ),
         )
       : null;
   final LinuxGstPlayer? _gstPlayer = Platform.isLinux ? LinuxGstPlayer() : null;
@@ -94,8 +103,10 @@ class AudioPlayerService extends ChangeNotifier {
       });
 
       _justAudioPlayer.positionStream.listen((pos) {
-        _position = pos;
-        notifyListeners();
+        if ((pos - _position).abs().inMilliseconds >= 500 || pos == Duration.zero) {
+          _position = pos;
+          notifyListeners();
+        }
       });
 
       _justAudioPlayer.durationStream.listen((dur) {
@@ -134,6 +145,11 @@ class AudioPlayerService extends ChangeNotifier {
           await _justAudioPlayer.setUrl(audioUrl);
           _justAudioPlayer.play();
           _isPlaying = true;
+        }
+
+        // Pré-carrega o manifesto da próxima faixa da fila em segundo plano
+        if (_queue.isNotEmpty && _currentIndex >= 0 && _currentIndex + 1 < _queue.length) {
+          unawaited(_ytService.getAudioOnlyStreamUrl(_queue[_currentIndex + 1].id));
         }
       } else {
         debugPrint('Não foi possível obter áudio para ${track.title}');

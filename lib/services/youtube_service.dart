@@ -1,12 +1,35 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' hide Playlist;
 import '../models/track.dart';
 import '../models/playlist.dart';
 
+class _StreamCacheEntry {
+  final Uri url;
+  final int totalBytes;
+  final String mimeType;
+  final DateTime createdAt;
+
+  _StreamCacheEntry({
+    required this.url,
+    required this.totalBytes,
+    required this.mimeType,
+    required this.createdAt,
+  });
+
+  bool get isExpired => DateTime.now().difference(createdAt).inMinutes >= 20;
+}
+
 class YouTubeService {
   final YoutubeExplode _yt = YoutubeExplode();
+  static final Map<String, _StreamCacheEntry> _streamCache = {};
+  static HttpServer? _proxyServer;
+  static final HttpClient _upstreamHttpClient = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 10)
+    ..idleTimeout = const Duration(seconds: 30);
 
   /// Extrai o ID do vídeo de uma URL ou ID solto
   static String? extractVideoId(String input) {
@@ -209,6 +232,9 @@ class YouTubeService {
     }
   }
 
+  static const String _visionUserAgent =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15';
+
   static final _visionClient = YoutubeApiClient({
     'context': {
       'client': {
@@ -216,8 +242,7 @@ class YouTubeService {
         'clientVersion': '1.02',
         'deviceMake': 'Apple',
         'deviceModel': 'RealityDevice17,1',
-        'userAgent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+        'userAgent': _visionUserAgent,
         'osName': 'visionOS',
         'osVersion': '26.5.23O471',
         'hl': 'en',
@@ -228,17 +253,48 @@ class YouTubeService {
     }
   }, 'https://www.youtube.com/youtubei/v1/player?key=AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc&prettyPrint=false');
 
-  /// Obtém a URL direta do stream de áudio apenas (M4A / Opus) com maior bitrate
-  Future<String?> getAudioOnlyStreamUrl(String videoId) async {
+  /// Seleciona o melhor stream de áudio, priorizando M4A (audio/mp4, itag 140)
+  /// por possuir decodificação de hardware nativa e indexação rápida no Android
+  AudioOnlyStreamInfo _selectBestAudioStream(Iterable<AudioOnlyStreamInfo> audioList) {
+    final mp4Streams = audioList
+        .where((s) => s.codec.mimeType.toLowerCase().contains('mp4'))
+        .toList();
+    if (mp4Streams.isNotEmpty) {
+      final itag140 = mp4Streams.where((s) => s.tag == 140).toList();
+      if (itag140.isNotEmpty) {
+        return itag140.first;
+      }
+      mp4Streams.sort((a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond));
+      return mp4Streams.first;
+    }
+    return audioList.withHighestBitrate();
+  }
+
+  Future<_StreamCacheEntry?> _resolveStreamEntry(String videoId, {bool forceRefresh = false}) async {
+    if (!forceRefresh) {
+      final cached = _streamCache[videoId];
+      if (cached != null && !cached.isExpired) {
+        return cached;
+      }
+    }
+
+    // 1. Tenta via cliente VISIONOS (sem bloqueio 403 / PoToken)
     try {
-      // 1. Tenta via cliente VISIONOS (sem bloqueio 403 / PoToken)
       final manifest = await _yt.videos.streamsClient.getManifest(
         videoId,
         ytClients: [_visionClient],
       );
       final audioList = manifest.audioOnly;
       if (audioList.isNotEmpty) {
-        return audioList.withHighestBitrate().url.toString();
+        final chosen = _selectBestAudioStream(audioList);
+        final entry = _StreamCacheEntry(
+          url: chosen.url,
+          totalBytes: chosen.size.totalBytes,
+          mimeType: chosen.codec.mimeType,
+          createdAt: DateTime.now(),
+        );
+        _streamCache[videoId] = entry;
+        return entry;
       }
     } catch (e) {
       debugPrint('Aviso: falha com cliente VISIONOS para $videoId: $e. Tentando padrão...');
@@ -249,12 +305,154 @@ class YouTubeService {
       final manifest = await _yt.videos.streamsClient.getManifest(videoId);
       final audioList = manifest.audioOnly;
       if (audioList.isNotEmpty) {
-        return audioList.withHighestBitrate().url.toString();
+        final chosen = _selectBestAudioStream(audioList);
+        final entry = _StreamCacheEntry(
+          url: chosen.url,
+          totalBytes: chosen.size.totalBytes,
+          mimeType: chosen.codec.mimeType,
+          createdAt: DateTime.now(),
+        );
+        _streamCache[videoId] = entry;
+        return entry;
       }
     } catch (e) {
       debugPrint('Erro ao extrair áudio de $videoId: $e');
     }
     return null;
+  }
+
+  /// Inicia um proxy HTTP local em loopback que força requisições Range em blocos,
+  /// eliminando o throttling de ~30 KB/s do YouTube quando o ExoPlayer omite o header Range.
+  Future<HttpServer?> _ensureProxyServer() async {
+    if (_proxyServer != null) return _proxyServer;
+    try {
+      final server = await HttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+        shared: true,
+      );
+      _proxyServer = server;
+      server.listen(
+        _handleProxyRequest,
+        onError: (e) => debugPrint('Erro no proxy de áudio: $e'),
+      );
+      return server;
+    } catch (e) {
+      debugPrint('Não foi possível iniciar proxy local: $e');
+      return null;
+    }
+  }
+
+  Future<void> _handleProxyRequest(HttpRequest request) async {
+    try {
+      final segments = request.uri.pathSegments;
+      if (segments.length < 2 || segments[0] != 'stream') {
+        request.response.statusCode = HttpStatus.notFound;
+        await request.response.close();
+        return;
+      }
+
+      final videoId = segments[1];
+      var entry = await _resolveStreamEntry(videoId);
+      if (entry == null || entry.totalBytes <= 0) {
+        request.response.statusCode = HttpStatus.badGateway;
+        await request.response.close();
+        return;
+      }
+
+      final totalBytes = entry.totalBytes;
+      int start = 0;
+      int end = totalBytes - 1;
+      bool hasRange = false;
+
+      final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+      if (rangeHeader != null && rangeHeader.startsWith('bytes=')) {
+        hasRange = true;
+        final parts = rangeHeader.substring(6).split('-');
+        if (parts.isNotEmpty && parts[0].isNotEmpty) {
+          start = int.tryParse(parts[0]) ?? 0;
+        }
+        if (parts.length > 1 && parts[1].isNotEmpty) {
+          end = int.tryParse(parts[1]) ?? (totalBytes - 1);
+        }
+      }
+
+      start = start.clamp(0, totalBytes - 1);
+      end = end.clamp(start, totalBytes - 1);
+      final contentLength = end - start + 1;
+
+      request.response.statusCode =
+          hasRange ? HttpStatus.partialContent : HttpStatus.ok;
+      request.response.headers.set(HttpHeaders.contentTypeHeader, entry.mimeType);
+      request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+      request.response.headers.set(HttpHeaders.contentLengthHeader, contentLength);
+      if (hasRange) {
+        request.response.headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes $start-$end/$totalBytes',
+        );
+      }
+
+      if (request.method == 'HEAD') {
+        await request.response.close();
+        return;
+      }
+
+      // Baixa em blocos de 512 KB com header Range explícito para velocidade máxima sem throttling
+      const int chunkSize = 512 * 1024;
+      int current = start;
+      bool refreshedOnce = false;
+
+      while (current <= end) {
+        final chunkEnd = (current + chunkSize - 1).clamp(current, end);
+        final upstreamReq = await _upstreamHttpClient.getUrl(entry!.url);
+        upstreamReq.headers.set(HttpHeaders.userAgentHeader, _visionUserAgent);
+        upstreamReq.headers.set(HttpHeaders.rangeHeader, 'bytes=$current-$chunkEnd');
+        final upstreamResp = await upstreamReq.close();
+
+        if (upstreamResp.statusCode == HttpStatus.forbidden && !refreshedOnce) {
+          refreshedOnce = true;
+          await upstreamResp.drain<void>();
+          entry = await _resolveStreamEntry(videoId, forceRefresh: true);
+          if (entry == null) break;
+          continue;
+        }
+
+        if (upstreamResp.statusCode != HttpStatus.partialContent &&
+            upstreamResp.statusCode != HttpStatus.ok) {
+          await upstreamResp.drain<void>();
+          break;
+        }
+
+        int receivedInChunk = 0;
+        await for (final data in upstreamResp) {
+          request.response.add(data);
+          receivedInChunk += data.length;
+        }
+        await request.response.flush();
+
+        if (receivedInChunk <= 0) break;
+        current += receivedInChunk;
+      }
+    } catch (_) {
+      // Cliente (ExoPlayer) fechou a conexão ao buscar/trocar de faixa
+    } finally {
+      try {
+        await request.response.close();
+      } catch (_) {}
+    }
+  }
+
+  /// Obtém a URL de stream de áudio otimizada (via proxy local anti-throttling)
+  Future<String?> getAudioOnlyStreamUrl(String videoId) async {
+    final entry = await _resolveStreamEntry(videoId);
+    if (entry == null) return null;
+
+    final server = await _ensureProxyServer();
+    if (server != null) {
+      return 'http://127.0.0.1:${server.port}/stream/$videoId';
+    }
+    return entry.url.toString();
   }
 
   /// Obtém coletâneas populares / sugestões iniciais

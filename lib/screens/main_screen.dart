@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/track.dart';
 import '../models/playlist.dart';
@@ -21,19 +22,81 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  static const _recentSearchesKey = 'daplayer_recent_searches';
   final TextEditingController _searchController = TextEditingController();
   final YouTubeService _ytService = YouTubeService();
 
   int _selectedTabIndex = 0;
   List<Track> _searchResults = [];
   List<Track> _trendingTracks = [];
+  List<String> _recentSearches = [];
   bool _isSearching = false;
   bool _isLoadingTrending = true;
 
   @override
   void initState() {
     super.initState();
+    _loadRecentSearches();
     _loadTrending();
+  }
+
+  Future<void> _loadRecentSearches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList(_recentSearchesKey);
+      if (saved != null && mounted) {
+        setState(() {
+          _recentSearches = saved;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erro ao carregar histórico de buscas: $e');
+    }
+  }
+
+  Future<void> _saveRecentSearch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty || YouTubeService.isYouTubeUrl(trimmed)) return;
+
+    final updated = List<String>.from(_recentSearches)
+      ..removeWhere((item) => item.toLowerCase() == trimmed.toLowerCase())
+      ..insert(0, trimmed);
+
+    if (updated.length > 15) {
+      updated.removeRange(15, updated.length);
+    }
+
+    setState(() {
+      _recentSearches = updated;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_recentSearchesKey, updated);
+    } catch (e) {
+      debugPrint('Erro ao salvar histórico de buscas: $e');
+    }
+  }
+
+  Future<void> _removeRecentSearch(String query) async {
+    final updated = List<String>.from(_recentSearches)..remove(query);
+    setState(() {
+      _recentSearches = updated;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_recentSearchesKey, updated);
+    } catch (_) {}
+  }
+
+  Future<void> _clearRecentSearches() async {
+    setState(() {
+      _recentSearches = [];
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_recentSearchesKey);
+    } catch (_) {}
   }
 
   Future<void> _loadTrending() async {
@@ -77,6 +140,9 @@ class _MainScreenState extends State<MainScreen> {
       }
     }
 
+    _searchController.text = trimmed;
+    await _saveRecentSearch(trimmed);
+
     setState(() {
       _isSearching = true;
       _selectedTabIndex = 1; // Alterna para a aba de resultados
@@ -110,7 +176,11 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final playerService = Provider.of<AudioPlayerService>(context);
+    final playerService = Provider.of<AudioPlayerService>(context, listen: false);
+    // Observa apenas mudanças na faixa atual ou estado de play/pause (evita rebuilds a cada tick de posição)
+    context.select<AudioPlayerService, (String?, bool)>(
+      (s) => (s.currentTrack?.id, s.isPlaying),
+    );
     final auth = Provider.of<AuthProvider>(context);
     final isMobile = MediaQuery.of(context).size.width < 720;
 
@@ -498,6 +568,12 @@ class _MainScreenState extends State<MainScreen> {
               child: TextField(
                 controller: _searchController,
                 style: const TextStyle(color: Colors.white),
+                onTap: () {
+                  if (_searchController.text.isEmpty && _recentSearches.isNotEmpty) {
+                    setState(() => _selectedTabIndex = 1);
+                  }
+                },
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   hintText: isMobile
                       ? 'Buscar no YouTube...'
@@ -512,7 +588,10 @@ class _MainScreenState extends State<MainScreen> {
                           icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
                           onPressed: () {
                             _searchController.clear();
-                            setState(() {});
+                            setState(() {
+                              _searchResults = [];
+                              _selectedTabIndex = 1;
+                            });
                           },
                         )
                       : null,
@@ -643,17 +722,157 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     if (_searchResults.isEmpty) {
-      return const Center(
-        child: Text(
-          'Digite um termo de pesquisa para encontrar músicas e coletâneas.',
-          style: TextStyle(color: Colors.white38, fontSize: 14),
-        ),
+      if (_recentSearches.isEmpty) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Text(
+              'Digite um termo de pesquisa para encontrar músicas e coletâneas.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white38, fontSize: 14),
+            ),
+          ),
+        );
+      }
+
+      return ListView(
+        padding: EdgeInsets.all(isMobile ? 14 : 24),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '🕒 Últimas Consultas',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: isMobile ? 16 : 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _clearRecentSearches,
+                icon: const Icon(Icons.delete_sweep, color: Colors.white54, size: 18),
+                label: const Text(
+                  'Limpar tudo',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._recentSearches.map(
+            (term) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF161622),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              ),
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.history, color: Color(0xFF9D4EDD), size: 20),
+                title: Text(
+                  term,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.north_west, color: Colors.white38, size: 18),
+                      tooltip: 'Preencher na busca',
+                      onPressed: () {
+                        setState(() {
+                          _searchController.text = term;
+                          _searchController.selection = TextSelection.fromPosition(
+                            TextPosition(offset: term.length),
+                          );
+                        });
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white38, size: 18),
+                      tooltip: 'Remover do histórico',
+                      onPressed: () => _removeRecentSearch(term),
+                    ),
+                  ],
+                ),
+                onTap: () => _performSearch(term),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
     return ListView(
       padding: EdgeInsets.all(isMobile ? 14 : 24),
       children: [
+        if (_recentSearches.isNotEmpty) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '🕒 Últimas consultas',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              InkWell(
+                onTap: _clearRecentSearches,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                  child: Text(
+                    'Limpar',
+                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _recentSearches.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final term = _recentSearches[index];
+                final isActive =
+                    term.toLowerCase() == _searchController.text.trim().toLowerCase();
+                return InputChip(
+                  avatar: Icon(
+                    Icons.history,
+                    size: 15,
+                    color: isActive ? Colors.white : const Color(0xFFC77DFF),
+                  ),
+                  label: Text(
+                    term,
+                    style: TextStyle(
+                      color: isActive ? Colors.white : Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                  backgroundColor:
+                      isActive ? const Color(0xFF7B2CBF) : const Color(0xFF1E1E2C),
+                  side: BorderSide(
+                    color: isActive ? const Color(0xFF9D4EDD) : Colors.white12,
+                  ),
+                  deleteIcon: const Icon(Icons.close, size: 14, color: Colors.white54),
+                  onDeleted: () => _removeRecentSearch(term),
+                  onPressed: () => _performSearch(term),
+                  visualDensity: VisualDensity.compact,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         Text(
           'Resultados da busca por "${_searchController.text}"',
           style: TextStyle(
