@@ -40,16 +40,29 @@ class BottomPlayerBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Barra de Progresso Fina
+            if (playerService.isBuffering) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  minHeight: 2.5,
+                  backgroundColor: Colors.white10,
+                  valueColor: AlwaysStoppedAnimation<Color>(palette.accent),
+                ),
+              ),
+              const SizedBox(height: 6),
+            ],
+            // Barra de Progresso com indicador real de Buffer (pré-carregamento)
             ProgressBar(
               progress: playerService.position,
               total: playerService.duration,
-              buffered: playerService.position,
+              buffered: playerService.bufferedPosition > playerService.position
+                  ? playerService.bufferedPosition
+                  : playerService.position,
               progressBarColor: palette.primaryLight,
-              baseBarColor: Colors.white.withValues(alpha: 0.2),
-              bufferedBarColor: Colors.white.withValues(alpha: 0.3),
+              baseBarColor: Colors.white.withValues(alpha: 0.18),
+              bufferedBarColor: palette.accent.withValues(alpha: 0.45),
               thumbColor: Colors.white,
-              barHeight: 3.0,
+              barHeight: 3.5,
               thumbRadius: 5.5,
               timeLabelTextStyle: const TextStyle(
                 color: Colors.white70,
@@ -87,7 +100,7 @@ class BottomPlayerBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 14),
 
-                // Título e Artista
+                // Título, Artista e Status do Buffer
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,15 +117,46 @@ class BottomPlayerBar extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        track.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 12,
+                      if (playerService.isBuffering)
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 10,
+                              height: 10,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.6,
+                                color: palette.accent,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                playerService.bufferPercent > 0
+                                    ? 'Pré-carregando buffer (${playerService.bufferPercent}%)...'
+                                    : 'Pré-carregando áudio...',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: palette.accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          playerService.bufferPercent > 0 && playerService.bufferPercent < 100
+                              ? '${track.artist} • Buffer ${playerService.bufferPercent}%'
+                              : track.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -145,7 +189,7 @@ class BottomPlayerBar extends StatelessWidget {
                           ],
                         ),
                         child: Center(
-                          child: playerService.isLoading
+                          child: playerService.isBuffering
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,

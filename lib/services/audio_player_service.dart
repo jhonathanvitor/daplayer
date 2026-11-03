@@ -36,7 +36,9 @@ class AudioPlayerService extends ChangeNotifier {
 
   bool _isPlaying = false;
   bool _isLoading = false;
+  bool _isBuffering = false;
   Duration _position = Duration.zero;
+  Duration _bufferedPosition = Duration.zero;
   Duration _duration = Duration.zero;
   double _volume = 1.0;
 
@@ -46,9 +48,16 @@ class AudioPlayerService extends ChangeNotifier {
   int get currentIndex => _currentIndex;
   bool get isPlaying => _isPlaying;
   bool get isLoading => _isLoading;
+  bool get isBuffering => _isLoading || _isBuffering;
   Duration get position => _position;
+  Duration get bufferedPosition => _bufferedPosition;
   Duration get duration => _duration;
   double get volume => _volume;
+  int get bufferPercent => _duration.inMilliseconds > 0
+      ? ((_bufferedPosition.inMilliseconds / _duration.inMilliseconds) * 100)
+          .clamp(0, 100)
+          .round()
+      : 0;
 
   AudioPlayerService({
     required YouTubeService ytService,
@@ -88,12 +97,26 @@ class AudioPlayerService extends ChangeNotifier {
       };
     } else if (_justAudioPlayer != null) {
       _justAudioPlayer.playerStateStream.listen((state) {
-        if (_isLoading) return;
-        final playing = state.playing && state.processingState != ProcessingState.completed;
-        if (_isPlaying != playing) {
-          _isPlaying = playing;
-          _updateTray();
-          _updateMobileMedia();
+        final buffering = state.processingState == ProcessingState.loading ||
+            state.processingState == ProcessingState.buffering;
+        bool shouldNotify = false;
+        if (_isBuffering != buffering) {
+          _isBuffering = buffering;
+          shouldNotify = true;
+        }
+
+        if (!_isLoading) {
+          final playing =
+              state.playing && state.processingState != ProcessingState.completed;
+          if (_isPlaying != playing) {
+            _isPlaying = playing;
+            _updateTray();
+            _updateMobileMedia();
+            shouldNotify = true;
+          }
+        }
+
+        if (shouldNotify) {
           notifyListeners();
         }
 
@@ -105,6 +128,15 @@ class AudioPlayerService extends ChangeNotifier {
       _justAudioPlayer.positionStream.listen((pos) {
         if ((pos - _position).abs().inMilliseconds >= 500 || pos == Duration.zero) {
           _position = pos;
+          notifyListeners();
+        }
+      });
+
+      _justAudioPlayer.bufferedPositionStream.listen((bufferedPos) {
+        if ((bufferedPos - _bufferedPosition).abs().inMilliseconds >= 500 ||
+            bufferedPos == Duration.zero ||
+            bufferedPos >= _duration) {
+          _bufferedPosition = bufferedPos;
           notifyListeners();
         }
       });
@@ -122,8 +154,10 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> playTrack(Track track) async {
     _currentTrack = track;
     _isLoading = true;
+    _isBuffering = true;
     _isPlaying = true;
     _position = Duration.zero;
+    _bufferedPosition = Duration.zero;
     _duration = track.duration;
     notifyListeners();
 
@@ -141,6 +175,8 @@ class AudioPlayerService extends ChangeNotifier {
           await _gstPlayer.setUrl(audioUrl);
           await _gstPlayer.play();
           _isPlaying = true;
+          _isBuffering = false;
+          _bufferedPosition = _duration;
         } else if (_justAudioPlayer != null) {
           await _justAudioPlayer.setUrl(audioUrl);
           _justAudioPlayer.play();

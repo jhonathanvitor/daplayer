@@ -178,9 +178,9 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final playerService = Provider.of<AudioPlayerService>(context, listen: false);
-    // Observa apenas mudanças na faixa atual ou estado de play/pause (evita rebuilds a cada tick de posição)
-    context.select<AudioPlayerService, (String?, bool)>(
-      (s) => (s.currentTrack?.id, s.isPlaying),
+    // Observa apenas mudanças na faixa atual, play/pause ou estado de pré-carregamento/buffer
+    context.select<AudioPlayerService, (String?, bool, bool)>(
+      (s) => (s.currentTrack?.id, s.isPlaying, s.isBuffering),
     );
     final auth = Provider.of<AuthProvider>(context);
     final palette = Provider.of<ThemeProvider>(context).current;
@@ -1357,12 +1357,19 @@ class _MainScreenState extends State<MainScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        subtitle: Text(
-          track.artist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
+        subtitle: isCurrent && playerService.isBuffering
+            ? Text(
+                'Pré-carregando áudio... • ${track.artist}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: palette.accent, fontSize: 12, fontWeight: FontWeight.w500),
+              )
+            : Text(
+                track.artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1377,13 +1384,22 @@ class _MainScreenState extends State<MainScreen> {
               },
             ),
             IconButton(
-              icon: Icon(
-                isCurrent && playerService.isPlaying
-                    ? Icons.pause_circle_filled
-                    : Icons.play_circle_filled,
-                color: palette.primaryLight,
-                size: 32,
-              ),
+              icon: isCurrent && playerService.isBuffering
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: palette.accent,
+                      ),
+                    )
+                  : Icon(
+                      isCurrent && playerService.isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_filled,
+                      color: palette.primaryLight,
+                      size: 32,
+                    ),
               onPressed: () {
                 if (isCurrent) {
                   playerService.togglePlayPause();
