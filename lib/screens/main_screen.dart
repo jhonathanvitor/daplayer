@@ -8,6 +8,7 @@ import '../services/audio_player_service.dart';
 import '../services/playlist_service.dart';
 import '../services/youtube_service.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/bottom_player_bar.dart';
 import '../widgets/add_to_playlist_dialog.dart';
 import '../widgets/auth_dialog.dart';
@@ -182,18 +183,19 @@ class _MainScreenState extends State<MainScreen> {
       (s) => (s.currentTrack?.id, s.isPlaying),
     );
     final auth = Provider.of<AuthProvider>(context);
+    final palette = Provider.of<ThemeProvider>(context).current;
     final isMobile = MediaQuery.of(context).size.width < 720;
 
     final mainContent = Column(
       children: [
-        _buildTopHeader(auth, isMobile: isMobile),
+        _buildTopHeader(auth, palette, isMobile: isMobile),
         Expanded(
           child: IndexedStack(
             index: _selectedTabIndex,
             children: [
-              _buildTrendingView(playerService, isMobile: isMobile),
-              _buildSearchResultsView(playerService, isMobile: isMobile),
-              _buildMyPlaylistsView(playerService, isMobile: isMobile),
+              _buildTrendingView(playerService, palette, isMobile: isMobile),
+              _buildSearchResultsView(playerService, palette, isMobile: isMobile),
+              _buildMyPlaylistsView(playerService, palette, isMobile: isMobile),
             ],
           ),
         ),
@@ -202,31 +204,31 @@ class _MainScreenState extends State<MainScreen> {
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F17),
+      backgroundColor: palette.scaffoldBg,
       drawer: isMobile
           ? Drawer(
-              backgroundColor: const Color(0xFF161622),
+              backgroundColor: palette.sidebarBg,
               child: SafeArea(
-                child: _buildSidebar(auth, isDrawer: true),
+                child: _buildSidebar(auth, palette, isDrawer: true),
               ),
             )
           : null,
-      bottomNavigationBar: isMobile ? _buildMobileNavBar() : null,
+      bottomNavigationBar: isMobile ? _buildMobileNavBar(palette) : null,
       body: isMobile
           ? SafeArea(child: mainContent)
           : Row(
               children: [
-                _buildSidebar(auth),
+                _buildSidebar(auth, palette),
                 Expanded(child: mainContent),
               ],
             ),
     );
   }
 
-  Widget _buildMobileNavBar() {
+  Widget _buildMobileNavBar(AppThemePalette palette) {
     return BottomNavigationBar(
-      backgroundColor: const Color(0xFF161622),
-      selectedItemColor: const Color(0xFF9D4EDD),
+      backgroundColor: palette.sidebarBg,
+      selectedItemColor: palette.primaryLight,
       unselectedItemColor: Colors.white54,
       currentIndex: _selectedTabIndex,
       onTap: (index) => setState(() => _selectedTabIndex = index),
@@ -250,10 +252,10 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildSidebar(AuthProvider auth, {bool isDrawer = false}) {
+  Widget _buildSidebar(AuthProvider auth, AppThemePalette palette, {bool isDrawer = false}) {
     return Container(
       width: isDrawer ? null : 250,
-      color: const Color(0xFF161622),
+      color: palette.sidebarBg,
       child: Column(
         children: [
           const SizedBox(height: 32),
@@ -264,18 +266,18 @@ class _MainScreenState extends State<MainScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF7B2CBF), Color(0xFFF72585)],
+                  gradient: LinearGradient(
+                    colors: [palette.primary, palette.gradientEnd],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.music_note, color: Colors.white, size: 26),
               ),
               const SizedBox(width: 12),
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'DaPlayer',
                     style: TextStyle(
                       color: Colors.white,
@@ -287,7 +289,7 @@ class _MainScreenState extends State<MainScreen> {
                   Text(
                     'Coletâneas MP3',
                     style: TextStyle(
-                      color: Color(0xFFC77DFF),
+                      color: palette.primaryLight,
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                     ),
@@ -304,6 +306,7 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icons.explore_outlined,
             activeIcon: Icons.explore,
             title: 'Descobrir',
+            palette: palette,
             isDrawer: isDrawer,
           ),
           _sidebarItem(
@@ -311,6 +314,7 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icons.search_outlined,
             activeIcon: Icons.search,
             title: 'Busca',
+            palette: palette,
             isDrawer: isDrawer,
           ),
           _sidebarItem(
@@ -318,13 +322,34 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icons.library_music_outlined,
             activeIcon: Icons.library_music,
             title: 'Minhas Coletâneas',
+            palette: palette,
             isDrawer: isDrawer,
+          ),
+
+          // Botão de Seletor de Temas na barra lateral / menu mobile
+          ListTile(
+            leading: Icon(Icons.palette_outlined, color: palette.accent),
+            title: const Text(
+              'Temas do App',
+              style: TextStyle(color: Colors.white70),
+            ),
+            subtitle: Text(
+              palette.name,
+              style: TextStyle(color: palette.primaryLight, fontSize: 11),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            onTap: () {
+              if (isDrawer) {
+                Navigator.of(context).maybePop();
+              }
+              _showThemePickerDialog(context);
+            },
           ),
 
           const Spacer(),
 
           // Card do Usuário (SQLite Criptografado)
-          _buildUserProfileCard(auth),
+          _buildUserProfileCard(auth, palette),
 
           const SizedBox(height: 8),
 
@@ -333,15 +358,15 @@ class _MainScreenState extends State<MainScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E2C),
+              color: palette.cardBg,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: Colors.white10),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.system_update_alt, color: Color(0xFF9D4EDD), size: 16),
-                SizedBox(width: 8),
-                Expanded(
+                Icon(Icons.system_update_alt, color: palette.primaryLight, size: 16),
+                const SizedBox(width: 8),
+                const Expanded(
                   child: Text(
                     'Minimiza para a bandeja do sistema',
                     style: TextStyle(color: Colors.white54, fontSize: 10),
@@ -356,19 +381,19 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildUserProfileCard(AuthProvider auth) {
+  Widget _buildUserProfileCard(AuthProvider auth, AppThemePalette palette) {
     if (!auth.isAuthenticated) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E2C),
+          color: palette.cardBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFF7B2CBF).withValues(alpha: 0.3)),
+          border: Border.all(color: palette.primary.withValues(alpha: 0.3)),
         ),
         child: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF7B2CBF),
+            backgroundColor: palette.primary,
             minimumSize: const Size.fromHeight(38),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
@@ -388,7 +413,7 @@ class _MainScreenState extends State<MainScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E2C),
+        color: palette.cardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white10),
       ),
@@ -399,7 +424,7 @@ class _MainScreenState extends State<MainScreen> {
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundColor: const Color(0xFF7B2CBF),
+                backgroundColor: palette.primary,
                 child: Text(
                   initials,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
@@ -478,7 +503,7 @@ class _MainScreenState extends State<MainScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF7B2CBF),
+                        color: palette.primary,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
@@ -509,13 +534,14 @@ class _MainScreenState extends State<MainScreen> {
     required IconData icon,
     required IconData activeIcon,
     required String title,
+    required AppThemePalette palette,
     bool isDrawer = false,
   }) {
     final isSelected = _selectedTabIndex == index;
     return ListTile(
       leading: Icon(
         isSelected ? activeIcon : icon,
-        color: isSelected ? const Color(0xFF9D4EDD) : Colors.white60,
+        color: isSelected ? palette.primaryLight : Colors.white60,
       ),
       title: Text(
         title,
@@ -525,7 +551,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
       selected: isSelected,
-      selectedTileColor: const Color(0xFF26263B),
+      selectedTileColor: palette.activeTileBg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20),
       onTap: () {
@@ -537,13 +563,13 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildTopHeader(AuthProvider auth, {bool isMobile = false}) {
+  Widget _buildTopHeader(AuthProvider auth, AppThemePalette palette, {bool isMobile = false}) {
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isMobile ? 12 : 24,
         vertical: isMobile ? 10 : 16,
       ),
-      color: const Color(0xFF12121B),
+      color: palette.headerBg,
       child: Row(
         children: [
           if (isMobile) ...[
@@ -561,7 +587,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Container(
               height: 46,
               decoration: BoxDecoration(
-                color: const Color(0xFF1E1E2C),
+                color: palette.cardBg,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.white10),
               ),
@@ -603,26 +629,31 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
           if (isMobile) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 2),
             IconButton(
-              icon: const Icon(Icons.link, color: Color(0xFF00F5D4), size: 22),
+              icon: Icon(Icons.palette_outlined, color: palette.primaryLight, size: 22),
+              tooltip: 'Temas',
+              onPressed: () => _showThemePickerDialog(context),
+            ),
+            IconButton(
+              icon: Icon(Icons.link, color: palette.accent, size: 22),
               tooltip: 'Colar Link',
               onPressed: () => _showImportByUrlDialog(context),
             ),
             IconButton(
               icon: Icon(
                 auth.isAuthenticated ? Icons.account_circle : Icons.person_outline,
-                color: auth.isAuthenticated ? const Color(0xFF00F5D4) : Colors.white70,
+                color: auth.isAuthenticated ? palette.accent : Colors.white70,
                 size: 24,
               ),
               tooltip: auth.isAuthenticated ? auth.currentUser!.name : 'Entrar',
               onPressed: () => _openAuthDialog(),
             ),
           ] else ...[
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7B2CBF),
+                backgroundColor: palette.primary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               ),
@@ -630,11 +661,17 @@ class _MainScreenState extends State<MainScreen> {
               icon: const Icon(Icons.search, color: Colors.white, size: 18),
               label: const Text('Buscar', style: TextStyle(color: Colors.white)),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: Icon(Icons.palette_outlined, color: palette.primaryLight),
+              tooltip: 'Trocar Tema do App',
+              onPressed: () => _showThemePickerDialog(context),
+            ),
+            const SizedBox(width: 4),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF00F5D4),
-                side: const BorderSide(color: Color(0xFF00F5D4)),
+                foregroundColor: palette.accent,
+                side: BorderSide(color: palette.accent),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
@@ -649,7 +686,7 @@ class _MainScreenState extends State<MainScreen> {
               style: OutlinedButton.styleFrom(
                 side: BorderSide(
                   color: auth.isAuthenticated
-                      ? const Color(0xFF00F5D4).withValues(alpha: 0.6)
+                      ? palette.accent.withValues(alpha: 0.6)
                       : Colors.white24,
                 ),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -658,7 +695,7 @@ class _MainScreenState extends State<MainScreen> {
               onPressed: () => _openAuthDialog(),
               icon: Icon(
                 auth.isAuthenticated ? Icons.verified_user : Icons.lock_outline,
-                color: auth.isAuthenticated ? const Color(0xFF00F5D4) : Colors.white70,
+                color: auth.isAuthenticated ? palette.accent : Colors.white70,
                 size: 18,
               ),
               label: Text(
@@ -683,11 +720,105 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  void _showThemePickerDialog(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final currentId = themeProvider.current.id;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final activePalette = Provider.of<ThemeProvider>(ctx).current;
+        return AlertDialog(
+          backgroundColor: activePalette.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Row(
+            children: [
+              Icon(Icons.palette, color: activePalette.primaryLight),
+              const SizedBox(width: 10),
+              const Text(
+                'Escolher Tema do App',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: ThemeProvider.themes.map((t) {
+                  final isSelected = t.id == activePalette.id || (t.id == currentId && t.id == activePalette.id);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: t.tileBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected ? t.primaryLight : Colors.white12,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: ListTile(
+                      leading: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [t.primary, t.gradientEnd],
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(t.icon, color: Colors.white, size: 22),
+                      ),
+                      title: Text(
+                        t.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      subtitle: Text(
+                        t.subtitle,
+                        style: const TextStyle(color: Colors.white60, fontSize: 11),
+                      ),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle, color: t.accent, size: 24)
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircleAvatar(radius: 6, backgroundColor: t.primaryLight),
+                                const SizedBox(width: 4),
+                                CircleAvatar(radius: 6, backgroundColor: t.accent),
+                              ],
+                            ),
+                      onTap: () => themeProvider.setTheme(t.id),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('Fechar', style: TextStyle(color: activePalette.accent)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Visualização de Coletâneas / Tendências
-  Widget _buildTrendingView(AudioPlayerService playerService, {bool isMobile = false}) {
+  Widget _buildTrendingView(
+    AudioPlayerService playerService,
+    AppThemePalette palette, {
+    bool isMobile = false,
+  }) {
     if (_isLoadingTrending) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF9D4EDD)),
+      return Center(
+        child: CircularProgressIndicator(color: palette.primaryLight),
       );
     }
 
@@ -708,16 +839,20 @@ class _MainScreenState extends State<MainScreen> {
           style: TextStyle(color: Colors.white54, fontSize: 12),
         ),
         const SizedBox(height: 16),
-        ..._trendingTracks.map((t) => _buildTrackTile(t, playerService, _trendingTracks)),
+        ..._trendingTracks.map((t) => _buildTrackTile(t, playerService, _trendingTracks, palette)),
       ],
     );
   }
 
   // Visualização de Resultados da Busca
-  Widget _buildSearchResultsView(AudioPlayerService playerService, {bool isMobile = false}) {
+  Widget _buildSearchResultsView(
+    AudioPlayerService playerService,
+    AppThemePalette palette, {
+    bool isMobile = false,
+  }) {
     if (_isSearching) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF9D4EDD)),
+      return Center(
+        child: CircularProgressIndicator(color: palette.primaryLight),
       );
     }
 
@@ -764,13 +899,13 @@ class _MainScreenState extends State<MainScreen> {
             (term) => Container(
               margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF161622),
+                color: palette.tileBg,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               ),
               child: ListTile(
                 dense: true,
-                leading: const Icon(Icons.history, color: Color(0xFF9D4EDD), size: 20),
+                leading: Icon(Icons.history, color: palette.primaryLight, size: 20),
                 title: Text(
                   term,
                   maxLines: 1,
@@ -849,7 +984,7 @@ class _MainScreenState extends State<MainScreen> {
                   avatar: Icon(
                     Icons.history,
                     size: 15,
-                    color: isActive ? Colors.white : const Color(0xFFC77DFF),
+                    color: isActive ? Colors.white : palette.primaryLight,
                   ),
                   label: Text(
                     term,
@@ -858,10 +993,9 @@ class _MainScreenState extends State<MainScreen> {
                       fontSize: 12,
                     ),
                   ),
-                  backgroundColor:
-                      isActive ? const Color(0xFF7B2CBF) : const Color(0xFF1E1E2C),
+                  backgroundColor: isActive ? palette.primary : palette.cardBg,
                   side: BorderSide(
-                    color: isActive ? const Color(0xFF9D4EDD) : Colors.white12,
+                    color: isActive ? palette.primaryLight : Colors.white12,
                   ),
                   deleteIcon: const Icon(Icons.close, size: 14, color: Colors.white54),
                   onDeleted: () => _removeRecentSearch(term),
@@ -882,13 +1016,17 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        ..._searchResults.map((t) => _buildTrackTile(t, playerService, _searchResults)),
+        ..._searchResults.map((t) => _buildTrackTile(t, playerService, _searchResults, palette)),
       ],
     );
   }
 
   // Visualização de Minhas Coletâneas
-  Widget _buildMyPlaylistsView(AudioPlayerService playerService, {bool isMobile = false}) {
+  Widget _buildMyPlaylistsView(
+    AudioPlayerService playerService,
+    AppThemePalette palette, {
+    bool isMobile = false,
+  }) {
     final playlistService = Provider.of<PlaylistService>(context);
     final playlists = playlistService.playlists;
 
@@ -910,8 +1048,8 @@ class _MainScreenState extends State<MainScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF00F5D4),
-                    side: const BorderSide(color: Color(0xFF00F5D4)),
+                    foregroundColor: palette.accent,
+                    side: BorderSide(color: palette.accent),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
@@ -924,11 +1062,11 @@ class _MainScreenState extends State<MainScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF7B2CBF),
+                    backgroundColor: palette.primary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
-                  onPressed: () => _showCreatePlaylistDialog(playlistService),
+                  onPressed: () => _showCreatePlaylistDialog(playlistService, palette),
                   icon: const Icon(Icons.add, color: Colors.white, size: 16),
                   label: const Text('Nova Coletânea', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
@@ -951,8 +1089,8 @@ class _MainScreenState extends State<MainScreen> {
                 children: [
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF00F5D4),
-                      side: const BorderSide(color: Color(0xFF00F5D4)),
+                      foregroundColor: palette.accent,
+                      side: BorderSide(color: palette.accent),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () => _showImportByUrlDialog(context),
@@ -962,10 +1100,10 @@ class _MainScreenState extends State<MainScreen> {
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7B2CBF),
+                      backgroundColor: palette.primary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    onPressed: () => _showCreatePlaylistDialog(playlistService),
+                    onPressed: () => _showCreatePlaylistDialog(playlistService, palette),
                     icon: const Icon(Icons.add, color: Colors.white),
                     label: const Text('Nova Coletânea', style: TextStyle(color: Colors.white)),
                   ),
@@ -986,7 +1124,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           )
         else
-          ...playlists.map((pl) => _buildPlaylistCard(pl, playerService, playlistService)),
+          ...playlists.map((pl) => _buildPlaylistCard(pl, playerService, playlistService, palette)),
       ],
     );
   }
@@ -995,9 +1133,10 @@ class _MainScreenState extends State<MainScreen> {
     Playlist playlist,
     AudioPlayerService playerService,
     PlaylistService playlistService,
+    AppThemePalette palette,
   ) {
     return Card(
-      color: const Color(0xFF1E1E2C),
+      color: palette.cardBg,
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ExpansionTile(
@@ -1005,8 +1144,8 @@ class _MainScreenState extends State<MainScreen> {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF7B2CBF), Color(0xFF3C096C)],
+            gradient: LinearGradient(
+              colors: [palette.primary, palette.gradientEnd],
             ),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -1024,13 +1163,18 @@ class _MainScreenState extends State<MainScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.add_link, color: Color(0xFF00F5D4), size: 22),
+              icon: const Icon(Icons.edit_outlined, color: Colors.white70, size: 20),
+              tooltip: 'Editar Nome da Coletânea',
+              onPressed: () => _showRenamePlaylistDialog(playlist, playlistService, palette),
+            ),
+            IconButton(
+              icon: Icon(Icons.add_link, color: palette.accent, size: 22),
               tooltip: 'Adicionar música por link',
               onPressed: () => _showImportByUrlDialog(context, initialPlaylistId: playlist.id),
             ),
             if (playlist.tracks.isNotEmpty)
               IconButton(
-                icon: const Icon(Icons.play_circle_fill, color: Color(0xFF9D4EDD), size: 32),
+                icon: Icon(Icons.play_circle_fill, color: palette.primaryLight, size: 32),
                 tooltip: 'Reproduzir Coletânea',
                 onPressed: () => playerService.playPlaylist(playlist),
               ),
@@ -1055,10 +1199,10 @@ class _MainScreenState extends State<MainScreen> {
                       TextButton.icon(
                         onPressed: () =>
                             _showImportByUrlDialog(context, initialPlaylistId: playlist.id),
-                        icon: const Icon(Icons.add_link, size: 16, color: Color(0xFF00F5D4)),
-                        label: const Text(
+                        icon: Icon(Icons.add_link, size: 16, color: palette.accent),
+                        label: Text(
                           'Adicionar música por link',
-                          style: TextStyle(color: Color(0xFF00F5D4), fontSize: 12),
+                          style: TextStyle(color: palette.accent, fontSize: 12),
                         ),
                       ),
                     ],
@@ -1087,15 +1231,88 @@ class _MainScreenState extends State<MainScreen> {
                     track.artist,
                     style: const TextStyle(color: Colors.white54, fontSize: 11),
                   ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.remove_circle_outline, color: Colors.white38, size: 20),
-                    tooltip: 'Remover da Coletânea',
-                    onPressed: () =>
-                        playlistService.removeTrackFromPlaylist(playlist.id, track.id),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.playlist_add, color: palette.primaryLight, size: 20),
+                        tooltip: 'Incluir em outra Coletânea',
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AddToPlaylistDialog(track: track),
+                          );
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.white38, size: 20),
+                        tooltip: 'Remover desta Coletânea',
+                        onPressed: () =>
+                            playlistService.removeTrackFromPlaylist(playlist.id, track.id),
+                      ),
+                    ],
                   ),
-                  onTap: () => playerService.playTrack(track),
+                  onTap: () => playerService.playPlaylist(
+                    playlist,
+                    startIndex: playlist.tracks.indexOf(track),
+                  ),
                 );
               }).toList(),
+      ),
+    );
+  }
+
+  void _showRenamePlaylistDialog(
+    Playlist playlist,
+    PlaylistService playlistService,
+    AppThemePalette palette,
+  ) {
+    final nameCtrl = TextEditingController(text: playlist.name);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Editar Nome da Coletânea', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Novo nome da coletânea',
+            hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: palette.tileBg,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          onSubmitted: (val) async {
+            if (val.trim().isNotEmpty) {
+              await playlistService.renamePlaylist(playlist.id, val.trim());
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: palette.primary,
+            ),
+            onPressed: () async {
+              if (nameCtrl.text.trim().isNotEmpty) {
+                await playlistService.renamePlaylist(playlist.id, nameCtrl.text.trim());
+                if (ctx.mounted) Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Salvar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -1104,16 +1321,17 @@ class _MainScreenState extends State<MainScreen> {
     Track track,
     AudioPlayerService playerService,
     List<Track> queue,
+    AppThemePalette palette,
   ) {
     final isCurrent = playerService.currentTrack?.id == track.id;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: isCurrent ? const Color(0xFF261D3A) : const Color(0xFF161622),
+        color: isCurrent ? palette.activeTileBg : palette.tileBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isCurrent ? const Color(0xFF9D4EDD) : Colors.white.withValues(alpha: 0.04),
+          color: isCurrent ? palette.primaryLight : Colors.white.withValues(alpha: 0.04),
         ),
       ),
       child: ListTile(
@@ -1135,7 +1353,7 @@ class _MainScreenState extends State<MainScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: isCurrent ? const Color(0xFFC77DFF) : Colors.white,
+            color: isCurrent ? palette.primaryLight : Colors.white,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1163,7 +1381,7 @@ class _MainScreenState extends State<MainScreen> {
                 isCurrent && playerService.isPlaying
                     ? Icons.pause_circle_filled
                     : Icons.play_circle_filled,
-                color: const Color(0xFF9D4EDD),
+                color: palette.primaryLight,
                 size: 32,
               ),
               onPressed: () {
@@ -1183,12 +1401,12 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  void _showCreatePlaylistDialog(PlaylistService playlistService) {
+  void _showCreatePlaylistDialog(PlaylistService playlistService, AppThemePalette palette) {
     final nameCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E2C),
+        backgroundColor: palette.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Criar Nova Coletânea', style: TextStyle(color: Colors.white)),
         content: TextField(
@@ -1199,7 +1417,7 @@ class _MainScreenState extends State<MainScreen> {
             hintText: 'Nome da coletânea (ex: Minhas Favoritas)',
             hintStyle: const TextStyle(color: Colors.white38),
             filled: true,
-            fillColor: const Color(0xFF2B2B3D),
+            fillColor: palette.tileBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none,
@@ -1213,7 +1431,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7B2CBF),
+              backgroundColor: palette.primary,
             ),
             onPressed: () async {
               if (nameCtrl.text.trim().isNotEmpty) {

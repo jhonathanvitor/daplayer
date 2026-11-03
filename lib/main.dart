@@ -11,6 +11,7 @@ import 'services/playlist_service.dart';
 import 'services/mobile_audio_handler.dart';
 import 'repositories/auth_repository.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
 import 'services/database_service.dart';
 import 'screens/main_screen.dart';
 
@@ -97,6 +98,7 @@ void main() async {
 
   final authRepository = LocalSqliteAuthRepository();
   final authProvider = AuthProvider(repository: authRepository);
+  final themeProvider = ThemeProvider();
 
   runApp(
     MultiProvider(
@@ -104,6 +106,7 @@ void main() async {
         ChangeNotifierProvider<AudioPlayerService>.value(value: playerService),
         ChangeNotifierProvider<PlaylistService>.value(value: playlistService),
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+        ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
       ],
       child: const DaPlayerApp(),
     ),
@@ -142,20 +145,11 @@ class _DaPlayerAppState extends State<DaPlayerApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
     return MaterialApp(
       title: 'DaPlayer',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F0F17),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF9D4EDD),
-          secondary: Color(0xFFF72585),
-          surface: Color(0xFF161622),
-        ),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-      ),
+      theme: themeProvider.current.toThemeData(),
       home: const MainScreen(),
     );
   }

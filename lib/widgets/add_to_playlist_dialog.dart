@@ -77,28 +77,39 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
                           ),
                         ),
                         subtitle: Text(
-                          '${pl.tracks.length} músicas',
-                          style: const TextStyle(color: Colors.white38),
+                          alreadyContains
+                              ? '${pl.tracks.length} músicas • Já incluída (toque para remover)'
+                              : '${pl.tracks.length} músicas • Toque para incluir',
+                          style: TextStyle(
+                            color: alreadyContains ? Colors.greenAccent.withValues(alpha: 0.8) : Colors.white38,
+                            fontSize: 12,
+                          ),
                         ),
                         trailing: alreadyContains
                             ? const Icon(Icons.check_circle, color: Colors.greenAccent)
-                            : const Icon(Icons.add, color: Colors.white60),
-                        onTap: alreadyContains
-                            ? null
-                            : () async {
-                                await playlistService.addTrackToPlaylist(
-                                    pl.id, widget.track);
-                                if (context.mounted) {
-                                  Navigator.of(context).pop();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Adicionado em "${pl.name}"!'),
-                                      backgroundColor: const Color(0xFF7B2CBF),
-                                    ),
-                                  );
-                                }
-                              },
+                            : const Icon(Icons.add_circle_outline, color: Colors.white70),
+                        onTap: () async {
+                          if (alreadyContains) {
+                            await playlistService.removeTrackFromPlaylist(
+                              pl.id,
+                              widget.track.id,
+                            );
+                          } else {
+                            await playlistService.addTrackToPlaylist(
+                              pl.id,
+                              widget.track,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  duration: const Duration(seconds: 1),
+                                  content: Text('Adicionado em "${pl.name}"!'),
+                                  backgroundColor: const Color(0xFF7B2CBF),
+                                ),
+                              );
+                            }
+                          }
+                        },
                       );
                     },
                   ),

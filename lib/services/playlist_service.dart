@@ -67,6 +67,21 @@ class PlaylistService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> renamePlaylist(String playlistId, String newName, {String? description}) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    final index = _playlists.indexWhere((p) => p.id == playlistId);
+    if (index != -1) {
+      final current = _playlists[index];
+      _playlists[index] = current.copyWith(
+        name: trimmed,
+        description: description?.trim() ?? current.description,
+      );
+      await _saveToStorage();
+      notifyListeners();
+    }
+  }
+
   Future<void> addTrackToPlaylist(String playlistId, Track track) async {
     final index = _playlists.indexWhere((p) => p.id == playlistId);
     if (index != -1) {

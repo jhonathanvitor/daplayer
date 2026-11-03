@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/audio_player_service.dart';
+import '../providers/theme_provider.dart';
 
 class BottomPlayerBar extends StatelessWidget {
   const BottomPlayerBar({super.key});
@@ -10,6 +11,7 @@ class BottomPlayerBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playerService = Provider.of<AudioPlayerService>(context);
+    final palette = Provider.of<ThemeProvider>(context).current;
     final track = playerService.currentTrack;
 
     if (track == null) {
@@ -21,7 +23,7 @@ class BottomPlayerBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF161622),
+        color: palette.sidebarBg,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.5),
@@ -29,8 +31,8 @@ class BottomPlayerBar extends StatelessWidget {
             offset: const Offset(0, -3),
           ),
         ],
-        border: const Border(
-          top: BorderSide(color: Color(0xFF2C2C40), width: 1),
+        border: Border(
+          top: BorderSide(color: palette.primaryLight.withValues(alpha: 0.25), width: 1),
         ),
       ),
       child: SafeArea(
@@ -38,12 +40,12 @@ class BottomPlayerBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Barra de Progresso Fina Branca (estilo modelo.webp)
+            // Barra de Progresso Fina
             ProgressBar(
               progress: playerService.position,
               total: playerService.duration,
               buffered: playerService.position,
-              progressBarColor: Colors.white,
+              progressBarColor: palette.primaryLight,
               baseBarColor: Colors.white.withValues(alpha: 0.2),
               bufferedBarColor: Colors.white.withValues(alpha: 0.3),
               thumbColor: Colors.white,
