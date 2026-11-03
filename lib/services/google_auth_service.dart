@@ -24,13 +24,19 @@ class GoogleAuthResult {
 
 class GoogleAuthService {
   // ID do Cliente Google Cloud
-  static String clientId =
-      '788527234384-21h1oibuem5t2u0ov9u1nndrl7cj6kmm.apps.googleusercontent.com';
+  static String clientId = const String.fromEnvironment(
+    'client_id',
+    defaultValue: '788527234384-21h1oibuem5t2u0ov9u1nndrl7cj6kmm.apps.googleusercontent.com',
+  );
 
-  static String clientSecret = const String.fromEnvironment('GOOGLE_CLIENT_SECRET', defaultValue: '');
+  static String clientSecret = const String.fromEnvironment(
+    'GOOGLE_CLIENT_SECRET',
+    defaultValue: String.fromEnvironment('client_secret', defaultValue: ''),
+  );
 
   static const int redirectPort = 8585;
   static const String redirectUri = 'http://localhost:$redirectPort';
+  static HttpServer? _activeServer;
 
   static Future<void> loadLocalConfig() async {
     try {
@@ -53,14 +59,16 @@ class GoogleAuthService {
     } catch (_) {}
   }
 
-  /// Inicia o fluxo completo de autenticação OAuth 2.0 PKCE do Google para Desktop
+  /// Inicia o fluxo completo de autenticação OAuth 2.0 PKCE do Google para Desktop e Mobile
   Future<GoogleAuthResult?> authenticateWithGoogle() async {
     await loadLocalConfig();
 
     HttpServer? server;
     try {
-      // 1. Inicia o servidor HTTP local para receber o retorno do Google
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, redirectPort);
+      // 1. Garante que qualquer servidor anterior na porta seja liberado e inicia novo servidor
+      await _activeServer?.close(force: true);
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, redirectPort, shared: true);
+      _activeServer = server;
 
       // 2. Monta o link oficial de login do Google com escopos do YouTube
       final authUri = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
@@ -72,10 +80,17 @@ class GoogleAuthService {
         'prompt': 'consent',
       });
 
-      // 3. Abre o navegador padrão do Ubuntu/sistema
-      if (await canLaunchUrl(authUri)) {
-        await launchUrl(authUri, mode: LaunchMode.externalApplication);
-      } else {
+      // 3. Abre o navegador padrão do sistema (Desktop ou Android/iOS)
+      bool launched = false;
+      try {
+        launched = await launchUrl(authUri, mode: LaunchMode.externalApplication);
+      } catch (_) {}
+      if (!launched) {
+        try {
+          launched = await launchUrl(authUri, mode: LaunchMode.platformDefault);
+        } catch (_) {}
+      }
+      if (!launched) {
         throw Exception('Não foi possível abrir o navegador padrão.');
       }
 
