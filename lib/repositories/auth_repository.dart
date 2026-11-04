@@ -137,7 +137,8 @@ class LocalSqliteAuthRepository implements AuthRepository {
             'youtube_token_encrypted': pgUser['youtube_token'] != null
                 ? CryptoService.encrypt(pgUser['youtube_token'] as String)
                 : null,
-            'created_at': (pgUser['created_at'] as DateTime?)?.toIso8601String() ??
+            'created_at': DateTime.tryParse(pgUser['created_at']?.toString() ?? '')
+                    ?.toIso8601String() ??
                 DateTime.now().toIso8601String(),
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
