@@ -46,7 +46,10 @@ app.*.map.json
 
 # Local secrets, database and distribution builds
 oauth_config.json
+.env
+.env.*
 *.env
+!.env.example
 dist/
 *.db
 *.db-shm
