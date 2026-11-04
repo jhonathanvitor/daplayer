@@ -714,9 +714,152 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _openAuthDialog() {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.isAuthenticated && auth.currentUser != null) {
+      _showUserAccountDialog(context);
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => const AuthDialog(),
+    );
+  }
+
+  void _showUserAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final auth = Provider.of<AuthProvider>(ctx);
+        final palette = Provider.of<ThemeProvider>(ctx).current;
+        final user = auth.currentUser;
+        if (user == null) {
+          Navigator.of(ctx).pop();
+          return const SizedBox.shrink();
+        }
+        final initials = user.name.trim().isNotEmpty
+            ? user.name.trim()[0].toUpperCase()
+            : 'U';
+
+        return AlertDialog(
+          backgroundColor: palette.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: palette.primary,
+                child: Text(
+                  initials,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      user.email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: palette.tileBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: palette.accent.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.verified_user, color: palette.accent, size: 18),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Sessão ativa • Conta sincronizada',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  leading: Icon(Icons.library_music, color: palette.primaryLight),
+                  title: const Text(
+                    'Minhas Coletâneas',
+                    style: TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Acessar suas playlists salvas',
+                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    setState(() => _selectedTabIndex = 2);
+                  },
+                ),
+                const Divider(color: Colors.white12),
+                const SizedBox(height: 4),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent.withValues(alpha: 0.2),
+                    foregroundColor: Colors.redAccent,
+                    side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    await auth.logout();
+                  },
+                  icon: const Icon(Icons.logout, size: 18),
+                  label: const Text(
+                    'Sair da Conta',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('Fechar', style: TextStyle(color: palette.accent)),
+            ),
+          ],
+        );
+      },
     );
   }
 
