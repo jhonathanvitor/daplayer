@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/user_model.dart';
 import '../services/database_service.dart';
 import '../services/crypto_service.dart';
 import '../services/google_auth_service.dart';
+import '../services/postgres_service.dart';
 
 /// Interface abstrata para autenticação
 /// Permite alternar facilmente entre SQLite local e uma API REST remota no futuro!
@@ -73,13 +75,26 @@ class LocalSqliteAuthRepository implements AuthRepository {
     // 4. Salva a sessão ativa
     await _saveActiveSession(db, userId);
 
-    return UserModel(
+    final user = UserModel(
       id: userId,
       name: name.trim(),
       email: normalizedEmail,
       authProvider: 'email',
       createdAt: now,
     );
+
+    if (PostgresService.instance.isConfigured) {
+      unawaited(
+        PostgresService.instance.upsertUser(
+          user: user,
+          emailHash: emailHash,
+          passwordHash: passwordHash,
+          salt: salt,
+        ),
+      );
+    }
+
+    return user;
   }
 
   @override
@@ -91,13 +106,50 @@ class LocalSqliteAuthRepository implements AuthRepository {
     final normalizedEmail = email.trim().toLowerCase();
     final emailHash = CryptoService.searchHash(normalizedEmail);
 
-    // 1. Busca pelo hash indexado
-    final results = await db.query(
+    // 1. Busca pelo hash indexado localmente
+    var results = await db.query(
       'users',
       where: 'email_hash = ?',
       whereArgs: [emailHash],
       limit: 1,
     );
+
+    // Se não estiver no SQLite local, tenta buscar diretamente no PostgreSQL (Neon)
+    if (results.isEmpty && PostgresService.instance.isConfigured) {
+      final pgUser = await PostgresService.instance.findUserByEmailOrGoogle(
+        emailHash: emailHash,
+      );
+      if (pgUser != null) {
+        await db.insert(
+          'users',
+          {
+            'id': pgUser['id'] as String,
+            'name_encrypted': CryptoService.encrypt((pgUser['name'] as String?) ?? ''),
+            'email_encrypted': CryptoService.encrypt(normalizedEmail),
+            'email_hash': emailHash,
+            'password_hash': pgUser['password_hash'] as String?,
+            'salt': pgUser['salt'] as String?,
+            'google_id': pgUser['google_id'] as String?,
+            'avatar_url_encrypted': pgUser['avatar_url'] != null
+                ? CryptoService.encrypt(pgUser['avatar_url'] as String)
+                : null,
+            'auth_provider': (pgUser['auth_provider'] as String?) ?? 'email',
+            'youtube_token_encrypted': pgUser['youtube_token'] != null
+                ? CryptoService.encrypt(pgUser['youtube_token'] as String)
+                : null,
+            'created_at': (pgUser['created_at'] as DateTime?)?.toIso8601String() ??
+                DateTime.now().toIso8601String(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        results = await db.query(
+          'users',
+          where: 'email_hash = ?',
+          whereArgs: [emailHash],
+          limit: 1,
+        );
+      }
+    }
 
     if (results.isEmpty) {
       throw Exception('Usuário não encontrado. Verifique seu e-mail.');
@@ -162,7 +214,16 @@ class LocalSqliteAuthRepository implements AuthRepository {
 
       // Recarrega os dados atualizados
       final updated = await db.query('users', where: 'id = ?', whereArgs: [userId], limit: 1);
-      return _mapRowToUserModel(updated.first, db);
+      final user = await _mapRowToUserModel(updated.first, db);
+      if (PostgresService.instance.isConfigured) {
+        unawaited(
+          PostgresService.instance.upsertUser(
+            user: user,
+            emailHash: emailHash,
+          ),
+        );
+      }
+      return user;
     } else {
       // Novo usuário criando conta diretamente pelo Google
       final userId = 'usr_g_${now.millisecondsSinceEpoch}';
@@ -183,7 +244,7 @@ class LocalSqliteAuthRepository implements AuthRepository {
 
       await _saveActiveSession(db, userId);
 
-      return UserModel(
+      final user = UserModel(
         id: userId,
         name: result.name,
         email: normalizedEmail,
@@ -193,6 +254,17 @@ class LocalSqliteAuthRepository implements AuthRepository {
         youtubeToken: result.accessToken,
         createdAt: now,
       );
+
+      if (PostgresService.instance.isConfigured) {
+        unawaited(
+          PostgresService.instance.upsertUser(
+            user: user,
+            emailHash: emailHash,
+          ),
+        );
+      }
+
+      return user;
     }
   }
 

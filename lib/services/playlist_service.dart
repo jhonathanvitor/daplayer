@@ -1,17 +1,39 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/playlist.dart';
 import '../models/track.dart';
+import 'postgres_service.dart';
 
 class PlaylistService extends ChangeNotifier {
   static const _storageKey = 'daplayer_user_playlists';
   List<Playlist> _playlists = [];
+  String? _activeUserId;
 
   List<Playlist> get playlists => List.unmodifiable(_playlists);
 
   PlaylistService() {
     loadPlaylists();
+  }
+
+  /// Vincula o usuário logado e sincroniza as coletâneas diretamente com o PostgreSQL (Neon)
+  Future<void> setActiveUser(String? userId) async {
+    if (_activeUserId == userId) return;
+    _activeUserId = userId;
+    if (userId != null && PostgresService.instance.isConfigured) {
+      final remotePlaylists = await PostgresService.instance.fetchUserPlaylists(userId);
+      if (remotePlaylists != null) {
+        if (remotePlaylists.isNotEmpty) {
+          _playlists = remotePlaylists;
+          await _saveToStorage(syncRemote: false);
+          notifyListeners();
+        } else if (_playlists.isNotEmpty) {
+          // Se o banco PostgreSQL do usuário ainda está vazio, envia as coletâneas locais
+          unawaited(PostgresService.instance.syncUserPlaylists(userId, _playlists));
+        }
+      }
+    }
   }
 
   Future<void> loadPlaylists() async {
@@ -64,6 +86,9 @@ class PlaylistService extends ChangeNotifier {
   Future<void> deletePlaylist(String playlistId) async {
     _playlists.removeWhere((p) => p.id == playlistId);
     await _saveToStorage();
+    if (_activeUserId != null && PostgresService.instance.isConfigured) {
+      unawaited(PostgresService.instance.deleteUserPlaylist(_activeUserId!, playlistId));
+    }
     notifyListeners();
   }
 
@@ -107,11 +132,20 @@ class PlaylistService extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveToStorage() async {
+  Future<void> _saveToStorage({bool syncRemote = true}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final encoded = json.encode(_playlists.map((p) => p.toMap()).toList());
       await prefs.setString(_storageKey, encoded);
+
+      if (syncRemote && _activeUserId != null && PostgresService.instance.isConfigured) {
+        unawaited(
+          PostgresService.instance.syncUserPlaylists(
+            _activeUserId!,
+            List<Playlist>.from(_playlists),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Erro ao salvar playlists no storage: $e');
     }

@@ -3,23 +3,25 @@
 -- Banco: daplay
 -- =============================================================================
 
--- Extensão para geração de UUIDs no PostgreSQL
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
 -- 1. Tabela de Usuários
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id VARCHAR(100) PRIMARY KEY,
   name VARCHAR(120) NOT NULL,
   email VARCHAR(180) UNIQUE NOT NULL,
+  email_hash VARCHAR(128) UNIQUE NOT NULL,
   password_hash VARCHAR(255),
+  salt VARCHAR(128),
   google_id VARCHAR(120),
+  avatar_url TEXT,
+  auth_provider VARCHAR(30) NOT NULL DEFAULT 'email',
+  youtube_token TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 2. Tabela de Assinaturas (Free, Pro, Premium)
 CREATE TABLE IF NOT EXISTS subscriptions (
   id BIGSERIAL PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   plan VARCHAR(30) NOT NULL DEFAULT 'free',
   is_active BOOLEAN NOT NULL DEFAULT FALSE,
   max_playlists INT NOT NULL DEFAULT 5, -- -1 = ilimitado
@@ -32,7 +34,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 -- 3. Tabela de Coletâneas (Playlists)
 CREATE TABLE IF NOT EXISTS playlists (
   id VARCHAR(100) PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name VARCHAR(150) NOT NULL,
   description TEXT DEFAULT '',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

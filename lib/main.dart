@@ -100,6 +100,11 @@ void main() async {
   final authProvider = AuthProvider(repository: authRepository);
   final themeProvider = ThemeProvider();
 
+  // Sincroniza automaticamente as coletâneas do usuário com o PostgreSQL (Neon) ao logar/deslogar
+  authProvider.addListener(() {
+    playlistService.setActiveUser(authProvider.currentUser?.id);
+  });
+
   runApp(
     MultiProvider(
       providers: [
