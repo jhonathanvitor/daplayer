@@ -24,7 +24,6 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
   final _registerConfirmPasswordController = TextEditingController();
 
   bool _obscurePassword = true;
-  bool _connectYouTubeOnRegister = true; // Marcado por padrão para abrir a vinculação!
 
   @override
   void initState() {
@@ -326,21 +325,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
             icon: Icons.lock_clock_outlined,
             obscureText: _obscurePassword,
           ),
-          const SizedBox(height: 8),
-
-          // Checkbox para vincular conta do YouTube logo após criar a conta
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            activeColor: const Color(0xFF7B2CBF),
-            title: const Text(
-              'Abrir para vincular conta do YouTube logo após cadastrar',
-              style: TextStyle(color: Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.w600),
-            ),
-            value: _connectYouTubeOnRegister,
-            onChanged: (val) => setState(() => _connectYouTubeOnRegister = val ?? true),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
 
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -356,7 +341,7 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
                 : const Text(
-                    'Cadastrar e Prosseguir',
+                    'Criar Conta',
                     style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
           ),
@@ -407,8 +392,9 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
 
     final success = await auth.login(email, password);
     if (success && mounted) {
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Bem-vindo de volta, ${auth.currentUser?.name}!'),
           backgroundColor: const Color(0xFF7B2CBF),
@@ -446,22 +432,15 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
 
     final success = await auth.register(name, email, password);
     if (success && mounted) {
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop(); // Fecha o modal de cadastro
 
-      if (_connectYouTubeOnRegister) {
-        // Abre imediatamente o modal para vincular a conta do Google/YouTube!
-        await showDialog(
-          context: context,
-          builder: (ctx) => const GoogleConnectDialog(isDirectLogin: false),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Conta criada com sucesso e salva criptografada! Olá, $name!'),
-            backgroundColor: const Color(0xFF7B2CBF),
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Conta criada com sucesso! Olá, $name!'),
+          backgroundColor: const Color(0xFF7B2CBF),
+        ),
+      );
     }
   }
 }

@@ -39,20 +39,27 @@ class PostgresService {
     if (_fileEnvCache != null) return _fileEnvCache!;
     final map = <String, String>{};
     try {
-      final file = File('.env');
-      if (file.existsSync()) {
-        for (final rawLine in file.readAsLinesSync()) {
-          final line = rawLine.trim();
-          if (line.isEmpty || line.startsWith('#')) continue;
-          final idx = line.indexOf('=');
-          if (idx <= 0) continue;
-          final key = line.substring(0, idx).trim();
-          var val = line.substring(idx + 1).trim();
-          if ((val.startsWith('"') && val.endsWith('"')) ||
-              (val.startsWith("'") && val.endsWith("'"))) {
-            val = val.substring(1, val.length - 1);
+      final execDir = File(Platform.resolvedExecutable).parent.path;
+      final candidates = [
+        File('.env'),
+        File('$execDir/.env'),
+      ];
+      for (final file in candidates) {
+        if (file.existsSync()) {
+          for (final rawLine in file.readAsLinesSync()) {
+            final line = rawLine.trim();
+            if (line.isEmpty || line.startsWith('#')) continue;
+            final idx = line.indexOf('=');
+            if (idx <= 0) continue;
+            final key = line.substring(0, idx).trim();
+            var val = line.substring(idx + 1).trim();
+            if ((val.startsWith('"') && val.endsWith('"')) ||
+                (val.startsWith("'") && val.endsWith("'"))) {
+              val = val.substring(1, val.length - 1);
+            }
+            map[key] = val;
           }
-          map[key] = val;
+          break;
         }
       }
     } catch (_) {}
@@ -182,6 +189,15 @@ class PostgresService {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
       ''');
+
+      // Garante colunas extras caso a tabela users tenha sido criada anteriormente com schema antigo
+      await _rawQuery(config, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS email_hash VARCHAR(128)');
+      await _rawQuery(config, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS salt VARCHAR(128)');
+      await _rawQuery(config, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(120)');
+      await _rawQuery(config, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT');
+      await _rawQuery(config, "ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(30) NOT NULL DEFAULT 'email'");
+      await _rawQuery(config, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS youtube_token TEXT');
+      await _rawQuery(config, 'CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_hash ON users(email_hash)');
 
       await _rawQuery(config, '''
         CREATE TABLE IF NOT EXISTS subscriptions (

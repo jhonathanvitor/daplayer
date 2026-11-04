@@ -10,10 +10,14 @@ import 'package:sqlite3/open.dart';
 void _linuxSqliteFfiInit() {
   if (Platform.isLinux) {
     open.overrideFor(OperatingSystem.linux, () {
+      final execDir = File(Platform.resolvedExecutable).parent.path;
       final candidates = [
+        '$execDir/lib/libsqlite3.so.0',
+        '$execDir/lib/libsqlite3.so',
         '/usr/lib/x86_64-linux-gnu/libsqlite3.so.0',
         '/usr/lib/aarch64-linux-gnu/libsqlite3.so.0',
         '/usr/lib/libsqlite3.so.0',
+        '/usr/lib64/libsqlite3.so.0',
         '${Platform.environment['HOME']}/.local/lib/libsqlite3.so',
         'libsqlite3.so.0',
         'libsqlite3.so',
@@ -55,6 +59,7 @@ class DatabaseService {
 
     try {
       final directory = await getApplicationSupportDirectory();
+      await directory.create(recursive: true);
       final dbPath = p.join(directory.path, 'daplayer_encrypted.db');
 
       return await openDatabase(

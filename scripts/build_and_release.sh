@@ -43,11 +43,18 @@ if ! command -v flutter &> /dev/null; then
     fi
 fi
 
-# 2. Compilar versão release
+# 2. Compilar versão release (embutindo oauth_config.json e .env via --dart-define-from-file)
 echo ""
 echo ">> [1/5] Compilando DaPlayer (Linux Release)..."
 cd "$PROJECT_DIR"
-flutter build linux --release
+DART_DEFINE_ARGS=()
+if [ -f "$PROJECT_DIR/oauth_config.json" ]; then
+    DART_DEFINE_ARGS+=("--dart-define-from-file=oauth_config.json")
+fi
+if [ -f "$PROJECT_DIR/.env" ]; then
+    DART_DEFINE_ARGS+=("--dart-define-from-file=.env")
+fi
+flutter build linux --release "${DART_DEFINE_ARGS[@]}"
 
 if [ ! -d "$BUILD_DIR" ]; then
     echo "Erro: Diretório de compilação $BUILD_DIR não encontrado!"

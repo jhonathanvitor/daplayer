@@ -57,7 +57,14 @@ flutter pub get
 # 3. Compilar versão release para Linux (se não tiver flag --no-build)
 if [ "$1" != "--no-build" ]; then
     echo ">> Compilando DaPlayer para Linux (Release)..."
-    flutter build linux --release
+    DART_DEFINE_ARGS=()
+    if [ -f "$PROJECT_DIR/oauth_config.json" ]; then
+        DART_DEFINE_ARGS+=("--dart-define-from-file=oauth_config.json")
+    fi
+    if [ -f "$PROJECT_DIR/.env" ]; then
+        DART_DEFINE_ARGS+=("--dart-define-from-file=.env")
+    fi
+    flutter build linux --release "${DART_DEFINE_ARGS[@]}"
 fi
 
 if [ ! -d "$BUILD_DIR" ]; then

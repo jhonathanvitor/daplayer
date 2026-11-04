@@ -84,13 +84,11 @@ class LocalSqliteAuthRepository implements AuthRepository {
     );
 
     if (PostgresService.instance.isConfigured) {
-      unawaited(
-        PostgresService.instance.upsertUser(
-          user: user,
-          emailHash: emailHash,
-          passwordHash: passwordHash,
-          salt: salt,
-        ),
+      await PostgresService.instance.upsertUser(
+        user: user,
+        emailHash: emailHash,
+        passwordHash: passwordHash,
+        salt: salt,
       );
     }
 
@@ -175,7 +173,16 @@ class LocalSqliteAuthRepository implements AuthRepository {
       throw Exception('Senha incorreta.');
     }
 
-    return _mapRowToUserModel(row, db);
+    final user = await _mapRowToUserModel(row, db);
+    if (PostgresService.instance.isConfigured) {
+      await PostgresService.instance.upsertUser(
+        user: user,
+        emailHash: emailHash,
+        passwordHash: storedHash,
+        salt: storedSalt,
+      );
+    }
+    return user;
   }
 
   @override
@@ -217,11 +224,11 @@ class LocalSqliteAuthRepository implements AuthRepository {
       final updated = await db.query('users', where: 'id = ?', whereArgs: [userId], limit: 1);
       final user = await _mapRowToUserModel(updated.first, db);
       if (PostgresService.instance.isConfigured) {
-        unawaited(
-          PostgresService.instance.upsertUser(
-            user: user,
-            emailHash: emailHash,
-          ),
+        await PostgresService.instance.upsertUser(
+          user: user,
+          emailHash: emailHash,
+          passwordHash: updated.first['password_hash'] as String?,
+          salt: updated.first['salt'] as String?,
         );
       }
       return user;
@@ -257,11 +264,9 @@ class LocalSqliteAuthRepository implements AuthRepository {
       );
 
       if (PostgresService.instance.isConfigured) {
-        unawaited(
-          PostgresService.instance.upsertUser(
-            user: user,
-            emailHash: emailHash,
-          ),
+        await PostgresService.instance.upsertUser(
+          user: user,
+          emailHash: emailHash,
         );
       }
 
@@ -289,7 +294,16 @@ class LocalSqliteAuthRepository implements AuthRepository {
     );
 
     final updated = await db.query('users', where: 'id = ?', whereArgs: [userId], limit: 1);
-    return _mapRowToUserModel(updated.first, db);
+    final user = await _mapRowToUserModel(updated.first, db);
+    if (PostgresService.instance.isConfigured) {
+      await PostgresService.instance.upsertUser(
+        user: user,
+        emailHash: updated.first['email_hash'] as String,
+        passwordHash: updated.first['password_hash'] as String?,
+        salt: updated.first['salt'] as String?,
+      );
+    }
+    return user;
   }
 
   @override
@@ -329,7 +343,19 @@ class LocalSqliteAuthRepository implements AuthRepository {
     );
 
     if (userRows.isEmpty) return null;
-    return _mapRowToUserModel(userRows.first, db, saveSession: false);
+    final row = userRows.first;
+    final user = await _mapRowToUserModel(row, db, saveSession: false);
+    if (PostgresService.instance.isConfigured) {
+      unawaited(
+        PostgresService.instance.upsertUser(
+          user: user,
+          emailHash: row['email_hash'] as String,
+          passwordHash: row['password_hash'] as String?,
+          salt: row['salt'] as String?,
+        ),
+      );
+    }
+    return user;
   }
 
   @override
