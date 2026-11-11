@@ -39,6 +39,12 @@ void main() async {
           onNext: playerService.next,
           onPrevious: playerService.previous,
           onSeek: playerService.seek,
+          onPlayPlaylist: playerService.playPlaylist,
+          onPlayQueue: playerService.playQueue,
+          getCurrentQueue: () => playerService.queue,
+          playlistService: playlistService,
+          downloadService: downloadService,
+          ytService: ytService,
         ),
         config: const AudioServiceConfig(
           androidNotificationChannelId: 'com.daplayer.daplayer.channel.audio',
