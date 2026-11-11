@@ -1211,8 +1211,53 @@ class _MainScreenState extends State<MainScreen> {
             ),
           )
         else
-          ...playlists.map((pl) => _buildPlaylistCard(pl, playerService, playlistService, palette)),
+          ...playlists.map(
+            (pl) => _buildPlaylistCard(
+              pl,
+              playerService,
+              playlistService,
+              palette,
+              isMobile: isMobile,
+            ),
+          ),
       ],
+    );
+  }
+
+  Future<void> _handleDownloadPlaylist(
+    Playlist playlist,
+    DownloadService downloadService,
+    AppThemePalette palette,
+  ) async {
+    final isAllDownloaded = downloadService.isPlaylistFullyDownloaded(playlist);
+    if (isAllDownloaded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Todas as ${playlist.tracks.length} músicas de "${playlist.name}" já estão baixadas offline!',
+          ),
+          backgroundColor: palette.primary,
+        ),
+      );
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Baixando coletânea "${playlist.name}" (${playlist.tracks.length} músicas) para ouvir offline...',
+        ),
+        backgroundColor: palette.primary,
+      ),
+    );
+    final count = await downloadService.downloadPlaylist(playlist);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Coletânea "${playlist.name}" pronta offline ($count/${playlist.tracks.length} músicas baixadas)!',
+        ),
+        backgroundColor: palette.primary,
+      ),
     );
   }
 
@@ -1220,8 +1265,9 @@ class _MainScreenState extends State<MainScreen> {
     Playlist playlist,
     AudioPlayerService playerService,
     PlaylistService playlistService,
-    AppThemePalette palette,
-  ) {
+    AppThemePalette palette, {
+    bool isMobile = false,
+  }) {
     final downloadService = Provider.of<DownloadService>(context);
     final downloadedCount = downloadService.getPlaylistDownloadedCount(playlist);
     final isAllDownloaded = downloadService.isPlaylistFullyDownloaded(playlist);
@@ -1229,128 +1275,229 @@ class _MainScreenState extends State<MainScreen> {
 
     return Card(
       color: palette.cardBg,
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 14),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ExpansionTile(
+        tilePadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: 4),
         leading: Container(
-          width: 48,
-          height: 48,
+          width: isMobile ? 42 : 48,
+          height: isMobile ? 42 : 48,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [palette.primary, palette.gradientEnd],
             ),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(Icons.queue_music, color: Colors.white),
+          child: Icon(Icons.queue_music, color: Colors.white, size: isMobile ? 22 : 24),
         ),
         title: Text(
           playlist.name,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: isMobile ? 14 : 15,
+          ),
         ),
         subtitle: Text(
           downloadedCount > 0
-              ? '${playlist.tracks.length} músicas • $downloadedCount baixadas offline'
+              ? '${playlist.tracks.length} músicas • $downloadedCount offline'
               : '${playlist.tracks.length} músicas',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: downloadedCount > 0 ? palette.accent : Colors.white54,
             fontSize: 12,
           ),
         ),
-        trailing: Wrap(
-          spacing: 0,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            if (playlist.tracks.isNotEmpty)
-              IconButton(
-                icon: isDownloadingPl
-                    ? SizedBox(
+        trailing: isMobile
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isDownloadingPl)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: palette.accent,
                         ),
-                      )
-                    : Icon(
-                        isAllDownloaded
-                            ? Icons.offline_pin
-                            : Icons.download_for_offline_outlined,
-                        color: isAllDownloaded ? palette.accent : Colors.white70,
-                        size: 21,
                       ),
-                tooltip: isDownloadingPl
-                    ? 'Baixando coletânea ($downloadedCount/${playlist.tracks.length})...'
-                    : isAllDownloaded
-                        ? 'Coletânea 100% baixada offline'
-                        : 'Baixar todas as músicas da coletânea offline',
-                onPressed: isDownloadingPl
-                    ? null
-                    : () async {
-                        if (isAllDownloaded) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Todas as ${playlist.tracks.length} músicas de "${playlist.name}" já estão baixadas offline!',
+                    )
+                  else if (isAllDownloaded)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(Icons.offline_pin, color: palette.accent, size: 18),
+                    ),
+                  if (playlist.tracks.isNotEmpty)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                      icon: Icon(Icons.play_circle_fill, color: palette.primaryLight, size: 30),
+                      tooltip: 'Reproduzir Coletânea',
+                      onPressed: () => playerService.playPlaylist(playlist),
+                    ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.white70, size: 22),
+                    color: palette.sidebarBg,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (action) {
+                      switch (action) {
+                        case 'download':
+                          _handleDownloadPlaylist(playlist, downloadService, palette);
+                          break;
+                        case 'share':
+                          _showSharePlaylistDialog(playlist, palette);
+                          break;
+                        case 'rename':
+                          _showRenamePlaylistDialog(playlist, playlistService, palette);
+                          break;
+                        case 'add_link':
+                          _showImportByUrlDialog(context, initialPlaylistId: playlist.id);
+                          break;
+                        case 'delete':
+                          playlistService.deletePlaylist(playlist.id);
+                          break;
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      if (playlist.tracks.isNotEmpty)
+                        PopupMenuItem(
+                          value: 'download',
+                          enabled: !isDownloadingPl,
+                          child: Row(
+                            children: [
+                              Icon(
+                                isAllDownloaded
+                                    ? Icons.offline_pin
+                                    : Icons.download_for_offline_outlined,
+                                color: palette.accent,
+                                size: 20,
                               ),
-                              backgroundColor: palette.primary,
-                            ),
-                          );
-                          return;
-                        }
-                        final messenger = ScaffoldMessenger.of(context);
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Baixando coletânea "${playlist.name}" (${playlist.tracks.length} músicas) para ouvir offline...',
-                            ),
-                            backgroundColor: palette.primary,
+                              const SizedBox(width: 10),
+                              Text(
+                                isAllDownloaded
+                                    ? 'Baixada Offline (100%)'
+                                    : 'Baixar Coletânea Offline',
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                              ),
+                            ],
                           ),
-                        );
-                        final count = await downloadService.downloadPlaylist(playlist);
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Coletânea "${playlist.name}" pronta offline ($count/${playlist.tracks.length} músicas baixadas)!',
+                        ),
+                      const PopupMenuItem(
+                        value: 'share',
+                        child: Row(
+                          children: [
+                            Icon(Icons.share_outlined, color: Colors.white70, size: 20),
+                            SizedBox(width: 10),
+                            Text('Compartilhar Coletânea', style: TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'rename',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, color: Colors.white70, size: 20),
+                            SizedBox(width: 10),
+                            Text('Editar Nome', style: TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'add_link',
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_link, color: palette.accent, size: 20),
+                            const SizedBox(width: 10),
+                            const Text('Adicionar por Link', style: TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            SizedBox(width: 10),
+                            Text('Excluir Coletânea', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (playlist.tracks.isNotEmpty)
+                    IconButton(
+                      icon: isDownloadingPl
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: palette.accent,
+                              ),
+                            )
+                          : Icon(
+                              isAllDownloaded
+                                  ? Icons.offline_pin
+                                  : Icons.download_for_offline_outlined,
+                              color: isAllDownloaded ? palette.accent : Colors.white70,
+                              size: 21,
                             ),
-                            backgroundColor: palette.primary,
-                          ),
-                        );
-                      },
+                      tooltip: isDownloadingPl
+                          ? 'Baixando coletânea ($downloadedCount/${playlist.tracks.length})...'
+                          : isAllDownloaded
+                              ? 'Coletânea 100% baixada offline'
+                              : 'Baixar todas as músicas da coletânea offline',
+                      onPressed: isDownloadingPl
+                          ? null
+                          : () => _handleDownloadPlaylist(playlist, downloadService, palette),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.share_outlined, color: Colors.white70, size: 20),
+                    tooltip: 'Compartilhar Coletânea',
+                    onPressed: () => _showSharePlaylistDialog(playlist, palette),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, color: Colors.white70, size: 20),
+                    tooltip: 'Editar Nome da Coletânea',
+                    onPressed: () => _showRenamePlaylistDialog(playlist, playlistService, palette),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.add_link, color: palette.accent, size: 22),
+                    tooltip: 'Adicionar música por link',
+                    onPressed: () => _showImportByUrlDialog(context, initialPlaylistId: playlist.id),
+                  ),
+                  if (playlist.tracks.isNotEmpty)
+                    IconButton(
+                      icon: Icon(Icons.play_circle_fill, color: palette.primaryLight, size: 32),
+                      tooltip: 'Reproduzir Coletânea',
+                      onPressed: () => playerService.playPlaylist(playlist),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                    tooltip: 'Excluir Coletânea',
+                    onPressed: () => playlistService.deletePlaylist(playlist.id),
+                  ),
+                ],
               ),
-            IconButton(
-              icon: const Icon(Icons.share_outlined, color: Colors.white70, size: 20),
-              tooltip: 'Compartilhar Coletânea',
-              onPressed: () => _showSharePlaylistDialog(playlist, palette),
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, color: Colors.white70, size: 20),
-              tooltip: 'Editar Nome da Coletânea',
-              onPressed: () => _showRenamePlaylistDialog(playlist, playlistService, palette),
-            ),
-            IconButton(
-              icon: Icon(Icons.add_link, color: palette.accent, size: 22),
-              tooltip: 'Adicionar música por link',
-              onPressed: () => _showImportByUrlDialog(context, initialPlaylistId: playlist.id),
-            ),
-            if (playlist.tracks.isNotEmpty)
-              IconButton(
-                icon: Icon(Icons.play_circle_fill, color: palette.primaryLight, size: 32),
-                tooltip: 'Reproduzir Coletânea',
-                onPressed: () => playerService.playPlaylist(playlist),
-              ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
-              tooltip: 'Excluir Coletânea',
-              onPressed: () => playlistService.deletePlaylist(playlist.id),
-            ),
-          ],
-        ),
         children: playlist.tracks.isEmpty
             ? [
                 Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       const Text(
                         'Coletânea vazia. ',
@@ -1373,6 +1520,7 @@ class _MainScreenState extends State<MainScreen> {
                 final isTrackDownloaded = downloadService.isDownloaded(track.id);
                 return ListTile(
                   dense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16),
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: CachedNetworkImage(
@@ -1386,10 +1534,12 @@ class _MainScreenState extends State<MainScreen> {
                     track.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                   subtitle: Text(
                     isTrackDownloaded ? '${track.artist} • Offline' : track.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: isTrackDownloaded ? palette.accent : Colors.white54,
                       fontSize: 11,
@@ -1398,9 +1548,18 @@ class _MainScreenState extends State<MainScreen> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildDownloadTrackButton(track, downloadService, palette, iconSize: 20),
+                      _buildDownloadTrackButton(
+                        track,
+                        downloadService,
+                        palette,
+                        iconSize: 19,
+                        compact: true,
+                      ),
                       IconButton(
-                        icon: Icon(Icons.playlist_add, color: palette.primaryLight, size: 20),
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        padding: const EdgeInsets.all(4),
+                        icon: Icon(Icons.playlist_add, color: palette.primaryLight, size: 19),
                         tooltip: 'Incluir em outra Coletânea',
                         onPressed: () {
                           showDialog(
@@ -1410,7 +1569,10 @@ class _MainScreenState extends State<MainScreen> {
                         },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.remove_circle_outline, color: Colors.white38, size: 20),
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        padding: const EdgeInsets.all(4),
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.white38, size: 19),
                         tooltip: 'Remover desta Coletânea',
                         onPressed: () =>
                             playlistService.removeTrackFromPlaylist(playlist.id, track.id),
@@ -1553,6 +1715,7 @@ class _MainScreenState extends State<MainScreen> {
     DownloadService downloadService,
     AppThemePalette palette, {
     double iconSize = 22,
+    bool compact = false,
   }) {
     final isDownloading = downloadService.isDownloading(track.id);
     final isDownloaded = downloadService.isDownloaded(track.id);
@@ -1560,7 +1723,7 @@ class _MainScreenState extends State<MainScreen> {
 
     if (isDownloading) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10),
         child: Tooltip(
           message: 'Baixando ${(progress * 100).round()}%...',
           child: SizedBox(
@@ -1578,6 +1741,9 @@ class _MainScreenState extends State<MainScreen> {
 
     if (isDownloaded) {
       return IconButton(
+        visualDensity: compact ? VisualDensity.compact : null,
+        constraints: compact ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
+        padding: compact ? const EdgeInsets.all(4) : null,
         icon: Icon(Icons.offline_pin, color: palette.accent, size: iconSize),
         tooltip: 'Baixada no dispositivo (toca offline) • Clique para remover download',
         onPressed: () async {
@@ -1612,6 +1778,9 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     return IconButton(
+      visualDensity: compact ? VisualDensity.compact : null,
+      constraints: compact ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
+      padding: compact ? const EdgeInsets.all(4) : null,
       icon: Icon(Icons.download_for_offline_outlined, color: Colors.white70, size: iconSize),
       tooltip: 'Baixar música para ouvir offline',
       onPressed: () async {
@@ -1747,9 +1916,18 @@ class _MainScreenState extends State<MainScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildDownloadTrackButton(track, downloadService, palette),
+            _buildDownloadTrackButton(
+              track,
+              downloadService,
+              palette,
+              iconSize: 21,
+              compact: true,
+            ),
             IconButton(
-              icon: const Icon(Icons.playlist_add, color: Colors.white70),
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              padding: const EdgeInsets.all(4),
+              icon: const Icon(Icons.playlist_add, color: Colors.white70, size: 22),
               tooltip: 'Adicionar à Coletânea',
               onPressed: () {
                 showDialog(
@@ -1759,6 +1937,9 @@ class _MainScreenState extends State<MainScreen> {
               },
             ),
             IconButton(
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: const EdgeInsets.all(4),
               icon: isCurrent && playerService.isBuffering
                   ? SizedBox(
                       width: 24,
@@ -1773,7 +1954,7 @@ class _MainScreenState extends State<MainScreen> {
                           ? Icons.pause_circle_filled
                           : Icons.play_circle_filled,
                       color: palette.primaryLight,
-                      size: 32,
+                      size: 30,
                     ),
               onPressed: () {
                 if (isCurrent) {
