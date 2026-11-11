@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart';
 import '../models/track.dart';
 import '../models/playlist.dart';
 import 'youtube_service.dart';
+import 'download_service.dart';
 import 'tray_service.dart';
 import 'linux_gst_player.dart';
 import 'mobile_audio_handler.dart';
@@ -37,6 +38,7 @@ class AudioPlayerService extends ChangeNotifier {
   bool _isPlaying = false;
   bool _isLoading = false;
   bool _isBuffering = false;
+  bool _isPlayingOffline = false;
   Duration _position = Duration.zero;
   Duration _bufferedPosition = Duration.zero;
   Duration _duration = Duration.zero;
@@ -49,6 +51,7 @@ class AudioPlayerService extends ChangeNotifier {
   bool get isPlaying => _isPlaying;
   bool get isLoading => _isLoading;
   bool get isBuffering => _isLoading || _isBuffering;
+  bool get isPlayingOffline => _isPlayingOffline;
   Duration get position => _position;
   Duration get bufferedPosition => _bufferedPosition;
   Duration get duration => _duration;
@@ -152,12 +155,16 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> playTrack(Track track) async {
+    final localFilePath = DownloadService.instance.getLocalFilePath(track.id);
+    final hasLocalFile = localFilePath != null;
+
     _currentTrack = track;
-    _isLoading = true;
-    _isBuffering = true;
+    _isLoading = !hasLocalFile;
+    _isBuffering = !hasLocalFile;
+    _isPlayingOffline = hasLocalFile;
     _isPlaying = true;
     _position = Duration.zero;
-    _bufferedPosition = Duration.zero;
+    _bufferedPosition = hasLocalFile ? track.duration : Duration.zero;
     _duration = track.duration;
     notifyListeners();
 
@@ -169,26 +176,48 @@ class AudioPlayerService extends ChangeNotifier {
     }
 
     try {
-      final audioUrl = await _ytService.getAudioOnlyStreamUrl(track.id);
-      if (audioUrl != null) {
+      // 1. Se a música já foi baixada localmente, reproduz direto do arquivo local (Offline-First!)
+      if (hasLocalFile) {
         if (Platform.isLinux && _gstPlayer != null) {
-          await _gstPlayer.setUrl(audioUrl);
+          final fileUri = Uri.file(localFilePath).toString();
+          await _gstPlayer.setUrl(fileUri);
           await _gstPlayer.play();
           _isPlaying = true;
           _isBuffering = false;
           _bufferedPosition = _duration;
         } else if (_justAudioPlayer != null) {
-          await _justAudioPlayer.setUrl(audioUrl);
+          await _justAudioPlayer.setFilePath(localFilePath);
           _justAudioPlayer.play();
           _isPlaying = true;
-        }
-
-        // Pré-carrega o manifesto da próxima faixa da fila em segundo plano
-        if (_queue.isNotEmpty && _currentIndex >= 0 && _currentIndex + 1 < _queue.length) {
-          unawaited(_ytService.getAudioOnlyStreamUrl(_queue[_currentIndex + 1].id));
+          _isBuffering = false;
+          _bufferedPosition = _duration;
         }
       } else {
-        debugPrint('Não foi possível obter áudio para ${track.title}');
+        // 2. Caso não esteja baixada localmente, consome da internet via stream otimizado
+        final audioUrl = await _ytService.getAudioOnlyStreamUrl(track.id);
+        if (audioUrl != null) {
+          if (Platform.isLinux && _gstPlayer != null) {
+            await _gstPlayer.setUrl(audioUrl);
+            await _gstPlayer.play();
+            _isPlaying = true;
+            _isBuffering = false;
+            _bufferedPosition = _duration;
+          } else if (_justAudioPlayer != null) {
+            await _justAudioPlayer.setUrl(audioUrl);
+            _justAudioPlayer.play();
+            _isPlaying = true;
+          }
+        } else {
+          debugPrint('Não foi possível obter áudio para ${track.title}');
+        }
+      }
+
+      // Pré-carrega o manifesto da próxima faixa da fila se ela não estiver baixada localmente
+      if (_queue.isNotEmpty && _currentIndex >= 0 && _currentIndex + 1 < _queue.length) {
+        final nextTrack = _queue[_currentIndex + 1];
+        if (!DownloadService.instance.isDownloaded(nextTrack.id)) {
+          unawaited(_ytService.getAudioOnlyStreamUrl(nextTrack.id));
+        }
       }
     } catch (e) {
       debugPrint('Erro ao reproduzir áudio: $e');

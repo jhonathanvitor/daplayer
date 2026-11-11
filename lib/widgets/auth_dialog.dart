@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import 'google_connect_dialog.dart';
 
 class AuthDialog extends StatefulWidget {
   const AuthDialog({super.key});
@@ -99,31 +98,6 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
               ),
               const SizedBox(height: 18),
 
-              // Botão de Login Direto com Google (Fluxo B)
-              _buildGoogleButton(context),
-              const SizedBox(height: 16),
-
-              // Divisor com "OU"
-              Row(
-                children: [
-                  const Expanded(child: Divider(color: Colors.white12)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'OU COM E-MAIL',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.4),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                  ),
-                  const Expanded(child: Divider(color: Colors.white12)),
-                ],
-              ),
-              const SizedBox(height: 16),
-
               // Seletor de Abas (Entrar / Cadastrar)
               Container(
                 decoration: BoxDecoration(
@@ -185,55 +159,6 @@ class _AuthDialogState extends State<AuthDialog> with SingleTickerProviderStateM
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGoogleButton(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () async {
-        Navigator.of(context).pop();
-        await showDialog(
-          context: context,
-          builder: (ctx) => const GoogleConnectDialog(isDirectLogin: true),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFFEA4335),
-              ),
-              child: const Icon(Icons.play_arrow, color: Colors.white, size: 16),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Continuar com o Google / YouTube',
-              style: TextStyle(
-                color: Color(0xFF1F1F1F),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
         ),
       ),
     );

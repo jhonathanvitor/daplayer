@@ -455,6 +455,93 @@ class YouTubeService {
     return entry.url.toString();
   }
 
+  /// Baixa o áudio completo da música para um arquivo local em blocos de 512 KB (sem throttling)
+  Future<bool> downloadAudioToFile(
+    String videoId,
+    File destinationFile, {
+    void Function(double progress)? onProgress,
+  }) async {
+    var entry = await _resolveStreamEntry(videoId);
+    if (entry == null || entry.totalBytes <= 0) return false;
+
+    final tempFile = File('${destinationFile.path}.part');
+    IOSink? sink;
+    try {
+      await destinationFile.parent.create(recursive: true);
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+      sink = tempFile.openWrite();
+
+      final totalBytes = entry.totalBytes;
+      const int chunkSize = 512 * 1024;
+      int current = 0;
+      bool refreshedOnce = false;
+
+      while (current < totalBytes) {
+        final chunkEnd = (current + chunkSize - 1).clamp(current, totalBytes - 1);
+        final upstreamReq = await _upstreamHttpClient.getUrl(entry!.url);
+        upstreamReq.headers.set(HttpHeaders.userAgentHeader, _visionUserAgent);
+        upstreamReq.headers.set(HttpHeaders.rangeHeader, 'bytes=$current-$chunkEnd');
+        final upstreamResp = await upstreamReq.close();
+
+        if (upstreamResp.statusCode == HttpStatus.forbidden && !refreshedOnce) {
+          refreshedOnce = true;
+          await upstreamResp.drain<void>();
+          entry = await _resolveStreamEntry(videoId, forceRefresh: true);
+          if (entry == null) {
+            await sink.close();
+            return false;
+          }
+          continue;
+        }
+
+        if (upstreamResp.statusCode != HttpStatus.partialContent &&
+            upstreamResp.statusCode != HttpStatus.ok) {
+          await upstreamResp.drain<void>();
+          await sink.close();
+          return false;
+        }
+
+        int receivedInChunk = 0;
+        await for (final data in upstreamResp) {
+          sink.add(data);
+          receivedInChunk += data.length;
+          final totalReceived = current + receivedInChunk;
+          onProgress?.call((totalReceived / totalBytes).clamp(0.0, 1.0));
+        }
+
+        if (receivedInChunk <= 0) break;
+        current += receivedInChunk;
+      }
+
+      await sink.flush();
+      await sink.close();
+      sink = null;
+
+      if (current >= totalBytes) {
+        if (await destinationFile.exists()) {
+          await destinationFile.delete();
+        }
+        await tempFile.rename(destinationFile.path);
+        onProgress?.call(1.0);
+        return true;
+      } else {
+        if (await tempFile.exists()) await tempFile.delete();
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Erro ao baixar áudio local para $videoId: $e');
+      try {
+        await sink?.close();
+      } catch (_) {}
+      try {
+        if (await tempFile.exists()) await tempFile.delete();
+      } catch (_) {}
+      return false;
+    }
+  }
+
   /// Obtém coletâneas populares / sugestões iniciais
   Future<List<Track>> getTrendingMusic() async {
     return search('melhores musicas coletanea 2026');

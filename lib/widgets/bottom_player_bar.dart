@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/audio_player_service.dart';
+import '../services/download_service.dart';
 import '../providers/theme_provider.dart';
 
 class BottomPlayerBar extends StatelessWidget {
@@ -11,6 +12,7 @@ class BottomPlayerBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playerService = Provider.of<AudioPlayerService>(context);
+    final downloadService = Provider.of<DownloadService>(context);
     final palette = Provider.of<ThemeProvider>(context).current;
     final track = playerService.currentTrack;
 
@@ -147,13 +149,17 @@ class BottomPlayerBar extends StatelessWidget {
                         )
                       else
                         Text(
-                          playerService.bufferPercent > 0 && playerService.bufferPercent < 100
-                              ? '${track.artist} • Buffer ${playerService.bufferPercent}%'
-                              : track.artist,
+                          playerService.isPlayingOffline || downloadService.isDownloaded(track.id)
+                              ? '${track.artist} • Baixada (Offline)'
+                              : playerService.bufferPercent > 0 && playerService.bufferPercent < 100
+                                  ? '${track.artist} • Buffer ${playerService.bufferPercent}%'
+                                  : track.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white60,
+                          style: TextStyle(
+                            color: playerService.isPlayingOffline || downloadService.isDownloaded(track.id)
+                                ? palette.accent
+                                : Colors.white60,
                             fontSize: 12,
                           ),
                         ),

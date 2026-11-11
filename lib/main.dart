@@ -5,6 +5,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:audio_service/audio_service.dart';
 
 import 'services/youtube_service.dart';
+import 'services/download_service.dart';
 import 'services/tray_service.dart';
 import 'services/audio_player_service.dart';
 import 'services/playlist_service.dart';
@@ -21,6 +22,7 @@ void main() async {
 
   final ytService = YouTubeService();
   final trayService = TrayService();
+  final downloadService = DownloadService.instance;
   final playerService = AudioPlayerService(
     ytService: ytService,
     trayService: trayService,
@@ -110,6 +112,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider<AudioPlayerService>.value(value: playerService),
         ChangeNotifierProvider<PlaylistService>.value(value: playlistService),
+        ChangeNotifierProvider<DownloadService>.value(value: downloadService),
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
         ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
       ],

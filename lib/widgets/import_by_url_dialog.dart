@@ -30,7 +30,7 @@ class _ImportByUrlDialogState extends State<ImportByUrlDialog> with SingleTicker
 
     if (widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
       final url = widget.initialUrl!;
-      if (YouTubeService.extractPlaylistId(url) != null) {
+      if (PlaylistService.isShareCode(url) || YouTubeService.extractPlaylistId(url) != null) {
         _playlistUrlController.text = url;
         _tabController.index = 0;
       } else {
@@ -165,13 +165,13 @@ class _ImportByUrlDialogState extends State<ImportByUrlDialog> with SingleTicker
     );
   }
 
-  // Aba 1: Importar Playlist inteira por URL
+  // Aba 1: Importar Playlist inteira por URL ou Código Compartilhado
   Widget _buildImportPlaylistTab(PlaylistService playlistService) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Cole o link de uma playlist do YouTube para importar todas as faixas automaticamente:',
+          'Cole um link de playlist do YouTube ou um código de coletânea compartilhada (daplayer://playlist/...):',
           style: TextStyle(color: Colors.white70, fontSize: 12),
         ),
         const SizedBox(height: 12),
@@ -179,7 +179,7 @@ class _ImportByUrlDialogState extends State<ImportByUrlDialog> with SingleTicker
           controller: _playlistUrlController,
           style: const TextStyle(color: Colors.white, fontSize: 13),
           decoration: InputDecoration(
-            hintText: 'https://www.youtube.com/playlist?list=PL...',
+            hintText: 'https://www.youtube.com/playlist?list=... ou daplayer://playlist/...',
             hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
             prefixIcon: const Icon(Icons.playlist_play, color: Color(0xFF9D4EDD)),
             filled: true,
@@ -297,7 +297,7 @@ class _ImportByUrlDialogState extends State<ImportByUrlDialog> with SingleTicker
   Future<void> _importPlaylist(PlaylistService playlistService) async {
     final url = _playlistUrlController.text.trim();
     if (url.isEmpty) {
-      setState(() => _statusMessage = 'Cole um link de playlist do YouTube.');
+      setState(() => _statusMessage = 'Cole um link do YouTube ou código daplayer://playlist/...');
       return;
     }
 
@@ -307,16 +307,43 @@ class _ImportByUrlDialogState extends State<ImportByUrlDialog> with SingleTicker
     });
 
     try {
+      // 1. Verifica se é um código compartilhado do DaPlayer
+      if (PlaylistService.isShareCode(url)) {
+        final sharedPlaylist = PlaylistService.decodeShareCode(url);
+        if (sharedPlaylist == null || sharedPlaylist.tracks.isEmpty) {
+          setState(() {
+            _statusMessage = 'Código de coletânea compartilhada inválido ou vazio.';
+          });
+        } else {
+          await playlistService.addPlaylist(sharedPlaylist);
+          if (mounted) {
+            final messenger = ScaffoldMessenger.of(context);
+            Navigator.of(context).pop();
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Coletânea compartilhada "${sharedPlaylist.name}" importada com ${sharedPlaylist.tracks.length} músicas!',
+                ),
+                backgroundColor: const Color(0xFF7B2CBF),
+              ),
+            );
+          }
+        }
+        return;
+      }
+
+      // 2. Caso contrário, importa como playlist do YouTube
       final importedPlaylist = await _ytService.importPlaylistFromUrl(url);
       if (importedPlaylist == null || importedPlaylist.tracks.isEmpty) {
         setState(() {
-          _statusMessage = 'Não foi possível ler as faixas. Verifique se o link da playlist é válido e público.';
+          _statusMessage = 'Não foi possível ler as faixas. Verifique se o link ou código é válido.';
         });
       } else {
         await playlistService.addPlaylist(importedPlaylist);
         if (mounted) {
+          final messenger = ScaffoldMessenger.of(context);
           Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(
               content: Text('Coletânea "${importedPlaylist.name}" importada com ${importedPlaylist.tracks.length} músicas!'),
               backgroundColor: const Color(0xFF7B2CBF),

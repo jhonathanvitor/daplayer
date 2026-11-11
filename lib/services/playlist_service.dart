@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/playlist.dart';
@@ -148,6 +149,90 @@ class PlaylistService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Erro ao salvar playlists no storage: $e');
+    }
+  }
+
+  /// Gera um código compacto compartilhável (daplayer://playlist/...) contendo todas as faixas
+  static String generateShareCode(Playlist playlist) {
+    final compact = {
+      'n': playlist.name,
+      'd': playlist.description,
+      't': playlist.tracks
+          .map((t) => [t.id, t.title, t.artist, t.duration.inSeconds])
+          .toList(),
+    };
+    final jsonBytes = utf8.encode(json.encode(compact));
+    final compressed = zlib.encode(jsonBytes);
+    final b64 = base64Url.encode(compressed);
+    return 'daplayer://playlist/$b64';
+  }
+
+  /// Gera uma mensagem formatada com as músicas e o código de importação para WhatsApp / Redes Sociais
+  static String generateShareMessage(Playlist playlist) {
+    final buffer = StringBuffer();
+    buffer.writeln('🎵 Coletânea DaPlayer: *${playlist.name}* (${playlist.tracks.length} músicas)');
+    if (playlist.description.trim().isNotEmpty) {
+      buffer.writeln(playlist.description.trim());
+    }
+    buffer.writeln('');
+    for (int i = 0; i < playlist.tracks.length; i++) {
+      final t = playlist.tracks[i];
+      buffer.writeln('${i + 1}. ${t.title} - ${t.artist}');
+      buffer.writeln('   https://youtu.be/${t.id}');
+    }
+    buffer.writeln('');
+    buffer.writeln('📥 Para importar toda a coletânea no DaPlayer, cole o código abaixo em "Colar Link":');
+    buffer.write(generateShareCode(playlist));
+    return buffer.toString();
+  }
+
+  /// Verifica se o texto contém um código de coletânea compartilhada do DaPlayer
+  static bool isShareCode(String input) {
+    return input.contains('daplayer://playlist/');
+  }
+
+  /// Decodifica um código compartilhado (ou mensagem contendo o código) em uma Playlist completa
+  static Playlist? decodeShareCode(String input) {
+    try {
+      final match = RegExp(r'daplayer://playlist/([A-Za-z0-9_\-=]+)').firstMatch(input);
+      if (match == null) return null;
+      final token = match.group(1)!;
+      final compressed = base64Url.decode(base64Url.normalize(token));
+      final jsonStr = utf8.decode(zlib.decode(compressed));
+      final map = json.decode(jsonStr) as Map<String, dynamic>;
+
+      final name = (map['n'] as String?) ?? 'Coletânea Compartilhada';
+      final desc = (map['d'] as String?) ?? '';
+      final rawTracks = (map['t'] as List<dynamic>?) ?? [];
+
+      final tracks = <Track>[];
+      for (final item in rawTracks) {
+        if (item is List && item.length >= 3) {
+          final videoId = item[0].toString();
+          final title = item[1].toString();
+          final artist = item[2].toString();
+          final durSec = item.length >= 4 ? (int.tryParse(item[3].toString()) ?? 0) : 0;
+          tracks.add(
+            Track(
+              id: videoId,
+              title: title,
+              artist: artist,
+              thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+              duration: Duration(seconds: durSec),
+            ),
+          );
+        }
+      }
+
+      return Playlist(
+        id: 'pl_shared_${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        description: desc,
+        tracks: tracks,
+      );
+    } catch (e) {
+      debugPrint('Erro ao decodificar coletânea compartilhada: $e');
+      return null;
     }
   }
 }
