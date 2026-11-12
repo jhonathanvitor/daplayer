@@ -39,10 +39,12 @@ class PostgresService {
     if (_fileEnvCache != null) return _fileEnvCache!;
     final map = <String, String>{};
     try {
+      final appData = Platform.environment['APPDATA'] ?? '';
       final execDir = File(Platform.resolvedExecutable).parent.path;
       final candidates = [
         File('.env'),
         File('$execDir/.env'),
+        if (appData.isNotEmpty) File('$appData/daplayer/.env'),
       ];
       for (final file in candidates) {
         if (file.existsSync()) {

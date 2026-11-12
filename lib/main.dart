@@ -15,10 +15,15 @@ import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/database_service.dart';
 import 'screens/main_screen.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   DatabaseService.initialize();
+  if (Platform.isWindows) {
+    // just_audio não tem implementação nativa no Windows: usa libmpv via media_kit
+    JustAudioMediaKit.ensureInitialized(windows: true, linux: false);
+  }
 
   final ytService = YouTubeService();
   final trayService = TrayService();

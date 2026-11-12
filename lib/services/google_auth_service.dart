@@ -41,11 +41,13 @@ class GoogleAuthService {
   static Future<void> loadLocalConfig() async {
     try {
       final home = Platform.environment['HOME'] ?? '';
+      final appData = Platform.environment['APPDATA'] ?? '';
       final execDir = File(Platform.resolvedExecutable).parent.path;
       final candidates = [
         File('oauth_config.json'),
         File('$home/.config/daplayer/oauth_config.json'),
         File('$execDir/oauth_config.json'),
+        if (appData.isNotEmpty) File('$appData/daplayer/oauth_config.json'),
       ];
       for (final file in candidates) {
         if (await file.exists()) {
