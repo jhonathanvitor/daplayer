@@ -39,6 +39,9 @@ class AudioPlayerService extends ChangeNotifier {
   bool _isLoading = false;
   bool _isBuffering = false;
   bool _isPlayingOffline = false;
+  bool _isSmartRelatedMode = false;
+  bool _isFetchingRelated = false;
+  final Set<String> _playedTrackIds = {};
   Duration _position = Duration.zero;
   Duration _bufferedPosition = Duration.zero;
   Duration _duration = Duration.zero;
@@ -232,16 +235,78 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> playPlaylist(Playlist playlist, {int startIndex = 0}) async {
     if (playlist.tracks.isEmpty) return;
 
+    // Modo Coletânea: mantém a sequência exata da playlist do usuário
+    _isSmartRelatedMode = false;
     _queue = List.from(playlist.tracks);
     _currentIndex = startIndex.clamp(0, _queue.length - 1);
     await playTrack(_queue[_currentIndex]);
   }
 
-  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
+  Future<void> playQueue(
+    List<Track> tracks, {
+    int startIndex = 0,
+    bool smartRelated = true,
+  }) async {
     if (tracks.isEmpty) return;
-    _queue = List.from(tracks);
-    _currentIndex = startIndex.clamp(0, _queue.length - 1);
-    await playTrack(_queue[_currentIndex]);
+    final selectedIndex = startIndex.clamp(0, tracks.length - 1);
+    final selectedTrack = tracks[selectedIndex];
+
+    if (smartRelated) {
+      // Modo Descobrir / Busca: toca a música selecionada e monta fila com músicas relacionadas ao cantor/gênero
+      _isSmartRelatedMode = true;
+      _playedTrackIds.add(selectedTrack.id);
+      _queue = [selectedTrack];
+      _currentIndex = 0;
+      await playTrack(selectedTrack);
+      unawaited(_loadRelatedTracksFor(selectedTrack, replaceUpcoming: true));
+    } else {
+      _isSmartRelatedMode = false;
+      _queue = List.from(tracks);
+      _currentIndex = selectedIndex;
+      await playTrack(_queue[_currentIndex]);
+    }
+  }
+
+  Future<void> _loadRelatedTracksFor(
+    Track seedTrack, {
+    bool replaceUpcoming = false,
+  }) async {
+    if (_isFetchingRelated || !_isSmartRelatedMode) return;
+    _isFetchingRelated = true;
+    try {
+      final related = await _ytService.getRelatedTracks(
+        seedTrack,
+        excludeIds: _playedTrackIds,
+      );
+      if (!_isSmartRelatedMode || related.isEmpty) return;
+
+      if (replaceUpcoming && _currentIndex >= 0 && _currentIndex < _queue.length) {
+        _queue = [
+          ..._queue.sublist(0, _currentIndex + 1),
+          ...related,
+        ];
+      } else {
+        for (final t in related) {
+          if (!_queue.any((q) => q.id == t.id)) {
+            _queue.add(t);
+          }
+        }
+      }
+
+      // Pré-carrega o stream da próxima música relacionada
+      if (_currentIndex + 1 < _queue.length) {
+        final nextTrack = _queue[_currentIndex + 1];
+        if (!DownloadService.instance.isDownloaded(nextTrack.id)) {
+          unawaited(_ytService.getAudioOnlyStreamUrl(nextTrack.id));
+        }
+      }
+      _updateMobileMedia();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Erro ao carregar músicas relacionadas: $e');
+    } finally {
+      _isFetchingRelated = false;
+    }
   }
 
   Future<void> togglePlayPause() async {
@@ -279,7 +344,26 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> next() async {
     if (_queue.isNotEmpty && _currentIndex + 1 < _queue.length) {
       _currentIndex++;
-      await playTrack(_queue[_currentIndex]);
+      final nextTrack = _queue[_currentIndex];
+      _playedTrackIds.add(nextTrack.id);
+      await playTrack(nextTrack);
+
+      // Se estiver no modo Busca/Descobrir e restarem poucas músicas, busca mais relacionadas automaticamente
+      if (_isSmartRelatedMode && (_queue.length - _currentIndex) <= 3) {
+        unawaited(_loadRelatedTracksFor(nextTrack, replaceUpcoming: false));
+      }
+      return;
+    }
+
+    // Se acabou a fila no modo Busca/Descobrir, busca relacionadas da música atual imediatamente
+    if (_isSmartRelatedMode && _currentTrack != null) {
+      await _loadRelatedTracksFor(_currentTrack!, replaceUpcoming: false);
+      if (_currentIndex + 1 < _queue.length) {
+        _currentIndex++;
+        final nextTrack = _queue[_currentIndex];
+        _playedTrackIds.add(nextTrack.id);
+        await playTrack(nextTrack);
+      }
     }
   }
 

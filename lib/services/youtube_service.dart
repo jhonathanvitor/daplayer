@@ -547,6 +547,141 @@ class YouTubeService {
     return search('melhores musicas coletanea 2026');
   }
 
+  /// Normaliza título para evitar repetir a mesma música em uploads diferentes
+  static String _normalizeTitleKey(String title) {
+    return title
+        .toLowerCase()
+        .replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '')
+        .replaceAll(RegExp(r'clipe oficial|video oficial|vídeo oficial|lyric video|áudio oficial|audio oficial|hd|4k'), '')
+        .replaceAll(RegExp(r'[^a-z0-9à-ú]'), '')
+        .trim();
+  }
+
+  /// Limpa sufixos de canal como "- Topic" ou "VEVO" para buscar pelo cantor/artista real
+  static String _cleanArtistName(String artist, String title) {
+    var cleaned = artist
+        .replaceAll(RegExp(r'\s*-\s*Topic$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'VEVO$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'Oficial$', caseSensitive: false), '')
+        .trim();
+
+    // Se o título estiver no formato "Cantor - Nome da Música", extrai o cantor do título
+    if (title.contains(' - ')) {
+      final parts = title.split(' - ');
+      if (parts.first.trim().length >= 3) {
+        cleaned = parts.first.trim();
+      }
+    }
+    return cleaned;
+  }
+
+  /// Busca músicas relacionadas ao cantor, gênero ou à música atual (para Autoplay em Busca e Descobrir)
+  Future<List<Track>> getRelatedTracks(
+    Track seedTrack, {
+    Set<String>? excludeIds,
+  }) async {
+    final excluded = <String>{seedTrack.id, ...?excludeIds};
+    final seenTitleKeys = <String>{_normalizeTitleKey(seedTrack.title)};
+    final related = <Track>[];
+
+    void addIfValid(Track candidate) {
+      if (excluded.contains(candidate.id)) return;
+      if (candidate.duration.inSeconds > 0 && candidate.duration.inSeconds < 45) {
+        return; // Ignora shorts/vinhetas muito curtas
+      }
+      final titleKey = _normalizeTitleKey(candidate.title);
+      if (titleKey.isNotEmpty && seenTitleKeys.contains(titleKey)) return;
+
+      excluded.add(candidate.id);
+      if (titleKey.isNotEmpty) seenTitleKeys.add(titleKey);
+      related.add(candidate);
+    }
+
+    // 1. Tenta obter recomendações diretas do algoritmo "Watch Next / Mix" do YouTube
+    try {
+      final url = Uri.parse('https://www.youtube.com/youtubei/v1/next?prettyPrint=false');
+      final body = json.encode({
+        'context': {
+          'client': {
+            'clientName': 'WEB',
+            'clientVersion': '2.20240101.00.00',
+            'hl': 'pt',
+            'gl': 'BR',
+          }
+        },
+        'videoId': seedTrack.id,
+      });
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent':
+                  'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0',
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final results = data['contents']?['twoColumnWatchNextResults']
+            ?['secondaryResults']?['secondaryResults']?['results'];
+        if (results is List) {
+          for (final item in results) {
+            final cvr = item['compactVideoRenderer'];
+            if (cvr != null) {
+              final videoId = cvr['videoId'] as String?;
+              if (videoId == null || videoId.isEmpty) continue;
+              final title = (cvr['title']?['simpleText'] ??
+                      cvr['title']?['runs']?[0]?['text'] ??
+                      '') as String;
+              final author = (cvr['longBylineText']?['runs']?[0]?['text'] ??
+                      cvr['shortBylineText']?['runs']?[0]?['text'] ??
+                      '') as String;
+              final durationStr = (cvr['lengthText']?['simpleText'] ??
+                      cvr['lengthText']?['runs']?[0]?['text'] ??
+                      '') as String;
+              if (title.isEmpty || durationStr.isEmpty) continue;
+
+              addIfValid(
+                Track(
+                  id: videoId,
+                  title: title,
+                  artist: author.isNotEmpty ? author : seedTrack.artist,
+                  thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+                  duration: _parseDurationString(durationStr),
+                ),
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Aviso ao buscar WatchNext relacionados: $e');
+    }
+
+    // 2. Complementa buscando músicas do mesmo cantor/artista e estilo musical
+    if (related.length < 8) {
+      try {
+        final cleanArtist = _cleanArtistName(seedTrack.artist, seedTrack.title);
+        final query = cleanArtist.isNotEmpty
+            ? '$cleanArtist melhores músicas'
+            : '${seedTrack.title} músicas parecidas';
+        final artistTracks = await search(query);
+        for (final t in artistTracks) {
+          addIfValid(t);
+          if (related.length >= 15) break;
+        }
+      } catch (e) {
+        debugPrint('Aviso ao buscar músicas do mesmo artista: $e');
+      }
+    }
+
+    return related;
+  }
+
   void dispose() {
     _yt.close();
   }

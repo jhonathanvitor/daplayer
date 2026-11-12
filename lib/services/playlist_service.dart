@@ -152,7 +152,7 @@ class PlaylistService extends ChangeNotifier {
     }
   }
 
-  /// Gera um código compacto compartilhável (daplayer://playlist/...) contendo todas as faixas
+  /// Gera um link clicável universal (funciona no WhatsApp, navegador e importa tudo no DaPlayer)
   static String generateShareCode(Playlist playlist) {
     final compact = {
       'n': playlist.name,
@@ -164,37 +164,45 @@ class PlaylistService extends ChangeNotifier {
     final jsonBytes = utf8.encode(json.encode(compact));
     final compressed = zlib.encode(jsonBytes);
     final b64 = base64Url.encode(compressed);
-    return 'daplayer://playlist/$b64';
+    final videoIds = playlist.tracks.take(50).map((t) => t.id).join(',');
+    if (videoIds.isNotEmpty) {
+      return 'https://www.youtube.com/watch_videos?video_ids=$videoIds&daplayer=$b64';
+    }
+    return 'https://www.youtube.com/watch_videos?daplayer=$b64';
   }
 
-  /// Gera uma mensagem formatada com as músicas e o código de importação para WhatsApp / Redes Sociais
+  /// Gera uma mensagem formatada com link clicável para enviar no WhatsApp / Redes Sociais
   static String generateShareMessage(Playlist playlist) {
+    final shareLink = generateShareCode(playlist);
     final buffer = StringBuffer();
     buffer.writeln('🎵 Coletânea DaPlayer: *${playlist.name}* (${playlist.tracks.length} músicas)');
     if (playlist.description.trim().isNotEmpty) {
       buffer.writeln(playlist.description.trim());
     }
     buffer.writeln('');
+    buffer.writeln('▶️ *Clique no link abaixo para ouvir ou importar a coletânea completa:*');
+    buffer.writeln(shareLink);
+    buffer.writeln('');
     for (int i = 0; i < playlist.tracks.length; i++) {
       final t = playlist.tracks[i];
       buffer.writeln('${i + 1}. ${t.title} - ${t.artist}');
       buffer.writeln('   https://youtu.be/${t.id}');
     }
-    buffer.writeln('');
-    buffer.writeln('📥 Para importar toda a coletânea no DaPlayer, cole o código abaixo em "Colar Link":');
-    buffer.write(generateShareCode(playlist));
     return buffer.toString();
   }
 
-  /// Verifica se o texto contém um código de coletânea compartilhada do DaPlayer
+  /// Verifica se o texto contém um link/código de coletânea compartilhada do DaPlayer
   static bool isShareCode(String input) {
-    return input.contains('daplayer://playlist/');
+    return input.contains('daplayer://playlist/') ||
+        input.contains('daplayer=') ||
+        input.contains('watch_videos?video_ids=');
   }
 
-  /// Decodifica um código compartilhado (ou mensagem contendo o código) em uma Playlist completa
+  /// Decodifica um link/código compartilhado (ou mensagem do WhatsApp contendo o link) em uma Playlist completa
   static Playlist? decodeShareCode(String input) {
     try {
-      final match = RegExp(r'daplayer://playlist/([A-Za-z0-9_\-=]+)').firstMatch(input);
+      final match = RegExp(r'(?:daplayer://playlist/|[?&]daplayer=)([A-Za-z0-9_\-=]+)')
+          .firstMatch(input);
       if (match == null) return null;
       final token = match.group(1)!;
       final compressed = base64Url.decode(base64Url.normalize(token));

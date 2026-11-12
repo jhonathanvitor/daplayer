@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/track.dart';
 import '../models/playlist.dart';
 import '../services/audio_player_service.dart';
@@ -23,8 +24,9 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   static const _recentSearchesKey = 'daplayer_recent_searches';
+  static const _deepLinkChannel = MethodChannel('com.daplayer.daplayer/deeplink');
   final TextEditingController _searchController = TextEditingController();
   final YouTubeService _ytService = YouTubeService();
 
@@ -34,12 +36,144 @@ class _MainScreenState extends State<MainScreen> {
   List<String> _recentSearches = [];
   bool _isSearching = false;
   bool _isLoadingTrending = true;
+  String? _lastHandledShareCode;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadRecentSearches();
     _loadTrending();
+    _initDeepLinks();
+  }
+
+  Future<void> _initDeepLinks() async {
+    _deepLinkChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onSharedText') {
+        final text = call.arguments as String?;
+        if (text != null && text.trim().isNotEmpty) {
+          await _handleIncomingSharedText(text.trim());
+        }
+      }
+    });
+
+    try {
+      final initialText = await _deepLinkChannel.invokeMethod<String>('getInitialSharedText');
+      if (initialText != null && initialText.trim().isNotEmpty) {
+        await _handleIncomingSharedText(initialText.trim());
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkClipboardForSharedPlaylist();
+    }
+  }
+
+  Future<void> _checkClipboardForSharedPlaylist() async {
+    try {
+      final data = await Clipboard.getData('text/plain');
+      final text = data?.text?.trim();
+      if (text == null || text.isEmpty) return;
+      if (!PlaylistService.isShareCode(text)) return;
+
+      final match = RegExp(r'(?:daplayer://playlist/|[?&]daplayer=)([A-Za-z0-9_\-=]+)')
+          .firstMatch(text);
+      if (match == null) return;
+      final token = match.group(1)!;
+      if (_lastHandledShareCode == token) return;
+      _lastHandledShareCode = token;
+
+      final decoded = PlaylistService.decodeShareCode(text);
+      if (decoded == null || decoded.tracks.isEmpty || !mounted) return;
+
+      final playlistService = Provider.of<PlaylistService>(context, listen: false);
+      // Se já tiver uma coletânea com exatamente o mesmo nome e quantidade, ignora
+      if (playlistService.playlists.any(
+        (p) => p.name == decoded.name && p.tracks.length == decoded.tracks.length,
+      )) {
+        return;
+      }
+
+      final palette = Provider.of<ThemeProvider>(context, listen: false).current;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: palette.cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.library_music, color: palette.accent),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Coletânea Compartilhada Detectada',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Deseja importar a coletânea "${decoded.name}" (${decoded.tracks.length} músicas) que está na sua área de transferência?',
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Agora não', style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: palette.primary),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await playlistService.addPlaylist(decoded);
+                if (mounted) {
+                  setState(() => _selectedTabIndex = 2);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Coletânea "${decoded.name}" importada com ${decoded.tracks.length} músicas!',
+                      ),
+                      backgroundColor: palette.primary,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.download_done, color: Colors.white, size: 18),
+              label: const Text('Importar Coletânea', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _handleIncomingSharedText(String text) async {
+    if (!mounted) return;
+    final decoded = PlaylistService.decodeShareCode(text);
+    if (decoded != null && decoded.tracks.isNotEmpty) {
+      final playlistService = Provider.of<PlaylistService>(context, listen: false);
+      final playerService = Provider.of<AudioPlayerService>(context, listen: false);
+      await playlistService.addPlaylist(decoded);
+      if (mounted) {
+        setState(() => _selectedTabIndex = 2);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Coletânea "${decoded.name}" (${decoded.tracks.length} músicas) importada e iniciando reprodução!',
+            ),
+          ),
+        );
+      }
+      await playerService.playPlaylist(decoded);
+      return;
+    }
+
+    if (YouTubeService.isYouTubeUrl(text)) {
+      _showImportByUrlDialog(context, initialUrl: text);
+    }
   }
 
   Future<void> _loadRecentSearches() async {
@@ -181,6 +315,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     _ytService.dispose();
     super.dispose();
@@ -1592,6 +1727,11 @@ class _MainScreenState extends State<MainScreen> {
   void _showSharePlaylistDialog(Playlist playlist, AppThemePalette palette) {
     final shareCode = PlaylistService.generateShareCode(playlist);
     final shareMessage = PlaylistService.generateShareMessage(playlist);
+    final match = RegExp(r'(?:daplayer://playlist/|[?&]daplayer=)([A-Za-z0-9_\-=]+)')
+        .firstMatch(shareCode);
+    if (match != null) {
+      _lastHandledShareCode = match.group(1);
+    }
 
     showDialog(
       context: context,
@@ -1623,7 +1763,7 @@ class _MainScreenState extends State<MainScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Envie esta coletânea (${playlist.tracks.length} músicas) para outro usuário ou dispositivo. Quem receber pode colar direto em "Colar Link" ou na busca do DaPlayer para importar todas as músicas de uma só vez!',
+                'Envie esta coletânea (${playlist.tracks.length} músicas) pelo WhatsApp! O link gerado é clicável: quem receber pode clicar direto no link para ouvir todas as músicas em sequência ou importar a coletânea inteira no DaPlayer!',
                 style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
               const SizedBox(height: 14),
@@ -1647,6 +1787,27 @@ class _MainScreenState extends State<MainScreen> {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: shareMessage));
+                  final waUri = Uri.parse(
+                    'https://wa.me/?text=${Uri.encodeComponent(shareMessage)}',
+                  );
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  await launchUrl(waUri, mode: LaunchMode.externalApplication);
+                },
+                icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                label: const Text(
+                  'Enviar Direto no WhatsApp',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
                   backgroundColor: palette.primary,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1658,15 +1819,15 @@ class _MainScreenState extends State<MainScreen> {
                   messenger.showSnackBar(
                     SnackBar(
                       content: const Text(
-                        'Código da coletânea copiado! Cole em "Colar Link" em outro DaPlayer para importar.',
+                        'Link clicável da coletânea copiado!',
                       ),
                       backgroundColor: palette.primary,
                     ),
                   );
                 },
-                icon: const Icon(Icons.copy, color: Colors.white, size: 18),
+                icon: const Icon(Icons.link, color: Colors.white, size: 18),
                 label: const Text(
-                  'Copiar Código de Importação Direta',
+                  'Copiar Link Clicável da Coletânea',
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -1685,7 +1846,7 @@ class _MainScreenState extends State<MainScreen> {
                   messenger.showSnackBar(
                     SnackBar(
                       content: const Text(
-                        'Lista com links + código copiada para enviar no WhatsApp / Redes Sociais!',
+                        'Mensagem completa com links clicáveis copiada!',
                       ),
                       backgroundColor: palette.primary,
                     ),
